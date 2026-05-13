@@ -8,6 +8,11 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-14
+
+Nine closed issues, +28 integration tests, real pre-built binaries on the
+Release page for the first time.
+
 ### Added
 
 - **BigQuery: JOIN/GROUP BY/HAVING and scalar function translation.** The
@@ -214,5 +219,6 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.2.0
 [0.1.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.1.0
