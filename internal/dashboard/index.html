@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>gcp-local dashboard</title>
+<style>
+body { font-family: -apple-system, system-ui, sans-serif; margin: 2rem; color: #222; }
+h1 { font-weight: 600; margin-bottom: 0.25rem; }
+h2 { font-size: 1rem; margin-top: 1.5rem; color: #555; }
+ul { list-style: none; padding-left: 0; margin: 0.25rem 0 1rem; }
+li { padding: 0.25rem 0; border-bottom: 1px solid #eee; font-family: ui-monospace, Menlo, monospace; font-size: 0.85rem; }
+.empty { color: #999; font-style: italic; }
+small { color: #777; }
+</style>
+</head>
+<body>
+<h1>gcp-local</h1>
+<small>local GCP emulator — state snapshot</small>
+<div id="root"></div>
+<script>
+async function load() {
+  const res = await fetch('/dashboard/api/state');
+  const data = await res.json();
+  const root = document.getElementById('root');
+  root.innerHTML = '';
+  const labels = Object.keys(data).sort();
+  for (const label of labels) {
+    const items = data[label] || [];
+    const h = document.createElement('h2');
+    h.textContent = label + ' (' + items.length + ')';
+    root.appendChild(h);
+    const ul = document.createElement('ul');
+    if (items.length === 0) {
+      const li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = '— none —';
+      ul.appendChild(li);
+    } else {
+      items.sort();
+      for (const it of items) {
+        const li = document.createElement('li');
+        li.textContent = it;
+        ul.appendChild(li);
+      }
+    }
+    root.appendChild(ul);
+  }
+}
+load();
+setInterval(load, 3000);
+</script>
+</body>
+</html>

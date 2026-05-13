@@ -1,0 +1,6 @@
+pytest>=7.0
+requests>=2.31
+google-cloud-storage>=2.10
+google-cloud-firestore>=2.16
+google-cloud-pubsub>=2.20
+google-auth>=2.20
