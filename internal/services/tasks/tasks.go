@@ -42,6 +42,14 @@ type httpRequest struct {
 	Body       string            `json:"body,omitempty"` // base64
 }
 
+// Retry policy for HTTP task dispatch. Mirrors real Cloud Tasks retry
+// behaviour at a coarse level (no jitter, no per-queue overrides for v1).
+const (
+	maxAttempts = 5
+	baseBackoff = 100 * time.Millisecond
+	maxBackoff  = 30 * time.Second
+)
+
 type Service struct {
 	store   state.Store
 	project string
@@ -220,6 +228,11 @@ func (s *Service) taskCollection(w http.ResponseWriter, r *http.Request, parts [
 			go func(tk taskResource) {
 				defer s.inflight.Done()
 				defer func() { _ = recover() }()
+				if delay := time.Until(tk.ScheduleTime); delay > 0 {
+					if !s.sleep(delay) {
+						return
+					}
+				}
 				s.dispatchHTTP(tk)
 			}(t)
 		}
@@ -265,6 +278,38 @@ func (s *Service) taskItem(w http.ResponseWriter, r *http.Request, parts []strin
 	}
 }
 
+// sleep waits for d or returns false if the service is shutting down.
+func (s *Service) sleep(d time.Duration) bool {
+	if d <= 0 {
+		return s.ctx.Err() == nil
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-s.ctx.Done():
+		return false
+	case <-t.C:
+		return true
+	}
+}
+
+func backoffFor(attempts int) time.Duration {
+	// attempts is the number of failures so far (1-based after first failure).
+	// 2^(attempts-1) * base, capped at maxBackoff.
+	shift := attempts - 1
+	if shift < 0 {
+		shift = 0
+	}
+	if shift > 30 {
+		shift = 30
+	}
+	d := baseBackoff << uint(shift)
+	if d <= 0 || d > maxBackoff {
+		return maxBackoff
+	}
+	return d
+}
+
 func (s *Service) dispatchHTTP(t taskResource) {
 	if t.HTTPRequest == nil || t.HTTPRequest.URL == "" {
 		return
@@ -277,19 +322,41 @@ func (s *Service) dispatchHTTP(t taskResource) {
 	if t.HTTPRequest.Body != "" {
 		body, _ = base64.StdEncoding.DecodeString(t.HTTPRequest.Body)
 	}
-	req, err := http.NewRequestWithContext(s.ctx, method, t.HTTPRequest.URL, bytes.NewReader(body))
-	if err != nil {
-		return
+	// Task deletion happens after success or after exhausting retries; either
+	// way we delete on return so it doesn't linger.
+	defer func() { _ = s.store.Delete(nsTasks, t.Name) }()
+
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if s.ctx.Err() != nil {
+			return
+		}
+		req, err := http.NewRequestWithContext(s.ctx, method, t.HTTPRequest.URL, bytes.NewReader(body))
+		if err != nil {
+			return
+		}
+		for k, v := range t.HTTPRequest.Headers {
+			req.Header.Set(k, v)
+		}
+		resp, err := s.client.Do(req)
+		var status int
+		if resp != nil {
+			status = resp.StatusCode
+			_, _ = io.Copy(io.Discard, resp.Body)
+			_ = resp.Body.Close()
+		}
+		// Success: 2xx or 3xx — real Cloud Tasks treats 2xx as success and
+		// drops the task; we mirror that for 3xx too (no redirect chasing).
+		if err == nil && status >= 200 && status < 400 {
+			return
+		}
+		// Retry on transport error or 5xx. 4xx is treated as a non-retryable
+		// failure and the task is dropped.
+		retryable := err != nil || (status >= 500 && status < 600)
+		if !retryable || attempt == maxAttempts {
+			return
+		}
+		if !s.sleep(backoffFor(attempt)) {
+			return
+		}
 	}
-	for k, v := range t.HTTPRequest.Headers {
-		req.Header.Set(k, v)
-	}
-	resp, err := s.client.Do(req)
-	if resp != nil {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
-	}
-	_ = err
-	// Task removed after dispatch (best-effort) — matches real Cloud Tasks behaviour after success.
-	_ = s.store.Delete(nsTasks, t.Name)
 }

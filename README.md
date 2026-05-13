@@ -252,7 +252,7 @@ services:
 | Cloud Storage    | working           | Real SDK compat via `STORAGE_EMULATOR_HOST`. JSON + XML APIs (GET/PUT/DELETE). Multipart and chunked resumable uploads with status query + 308 Resume Incomplete. |
 | Pub/Sub          | working           | REST + full gRPC incl `StreamingPull`. Ack deadlines, nack, modAck redelivery. Push subscriptions deliver to `pushConfig.pushEndpoint` with retry on non-2xx. |
 | Secret Manager   | working           | Full CRUD + versions + access. Cascade-delete versions. |
-| Cloud Tasks      | working           | Queue CRUD + HTTP dispatch to target URL.          |
+| Cloud Tasks      | working           | Queue CRUD + HTTP dispatch to target URL. Honours `scheduleTime`, retries 5xx with exponential backoff (5 attempts). |
 | Cloud Scheduler  | working           | Standard 5-field cron (`0 9 * * 1-5`), `@every <dur>`, and legacy `every <dur>`. |
 | KMS              | working           | AES-GCM encrypt/decrypt with generated key material. |
 | Cloud Logging    | working           | `WriteLogEntries` + `ListLogEntries` with filter subset (`severity`, `logName`, `resource.type`, `resource.labels.*`, `timestamp`, `AND`). |
