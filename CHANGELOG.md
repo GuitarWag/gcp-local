@@ -10,6 +10,13 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ### Added
 
+- **Pub/Sub: push subscription delivery.** Subscriptions created with
+  `pushConfig.pushEndpoint` now actually POST each message to the endpoint
+  as `{"message": {...}, "subscription": "..."}`. 2xx responses ack the
+  message; non-2xx and transport errors leave it in the queue for retry
+  with exponential backoff capped at the subscription's ack deadline.
+  Works for both REST and gRPC-created subscriptions and for subs seeded
+  from config. Closes #14.
 - **Firestore: Listen streaming RPC.** `DocumentRef.Snapshots()` and
   `Query.Snapshots()` from the real `cloud.google.com/go/firestore` SDK now
   work end-to-end. Listeners receive an initial state snapshot (`ADD` →

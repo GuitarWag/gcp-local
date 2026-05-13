@@ -363,6 +363,9 @@ func (g *Gateway) Run(ctx context.Context) error {
 		if g.tasks != nil {
 			g.tasks.Stop()
 		}
+		if g.pubsub != nil {
+			g.pubsub.Stop()
+		}
 		if g.sched != nil {
 			g.sched.Stop()
 		}
