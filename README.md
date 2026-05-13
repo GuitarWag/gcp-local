@@ -258,7 +258,7 @@ services:
 | Cloud Logging    | working           | `WriteLogEntries` + `ListLogEntries` with filter subset (`severity`, `logName`, `resource.type`, `resource.labels.*`, `timestamp`, `AND`). |
 | Cloud Monitoring | working           | `CreateTimeSeries` + `ListTimeSeries`.             |
 | Firestore        | working (subset)  | gRPC: `Commit`, `GetDocument`, `RunQuery`, `BatchWrite`, `Listen` streaming (DocumentRef + Query snapshots, no Where/OrderBy filters). |
-| BigQuery         | working (subset)  | SQLite backend. REST datasets/tables/insertAll/queries. Typed column schema. |
+| BigQuery         | working (subset)  | SQLite backend. REST datasets/tables/insertAll/queries. Typed column schema. SQL: `SELECT`/`INSERT`, `JOIN ... ON`, `GROUP BY`, `HAVING`, aggregates (`COUNT`/`SUM`/`AVG`/`MIN`/`MAX`), `ORDER BY`. Scalar translation: `CURRENT_TIMESTAMP()`, `SAFE_CAST` (no NULL-on-failure), `CONCAT`, `IFNULL`. Not translated: window functions, `STRUCT`, `ARRAY`, `UNNEST`, `PARTITION BY`, `WITH RECURSIVE`, BigQuery-specific date arithmetic. |
 | Memorystore      | working           | miniredis on its own port. Disabled by default.    |
 | Cloud Run        | partial           | REST CRUD + invoke proxy to `backendUrl`. No subprocess execution. |
 | Cloud Functions  | partial           | Same shape as Cloud Run.                           |

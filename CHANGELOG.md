@@ -10,6 +10,17 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ### Added
 
+- **BigQuery: JOIN/GROUP BY/HAVING and scalar function translation.** The
+  query translator no longer mangles qualified column refs (`alias.col`),
+  numeric literals, or aggregate calls, so `JOIN ... ON`, `GROUP BY`,
+  `HAVING`, `COUNT(*)`, `SUM/AVG/MIN/MAX`, and `ORDER BY` now work via the
+  REST `queries` endpoint. A small set of BigQuery scalar functions is
+  rewritten before hitting SQLite: `CURRENT_TIMESTAMP()` → `CURRENT_TIMESTAMP`,
+  `SAFE_CAST(x AS T)` → `CAST(x AS T)` (no NULL-on-failure for v1),
+  `CONCAT(a, b, ...)` → `(a || b || ...)`; `IFNULL` passes through. Not
+  translated: window functions, `STRUCT`, `ARRAY`, `UNNEST`, `PARTITION
+  BY`, `WITH RECURSIVE`, BigQuery-specific date arithmetic. Engine remains
+  pure-Go SQLite (no DuckDB). Closes #7.
 - **Pub/Sub: push subscription delivery.** Subscriptions created with
   `pushConfig.pushEndpoint` now actually POST each message to the endpoint
   as `{"message": {...}, "subscription": "..."}`. 2xx responses ack the
