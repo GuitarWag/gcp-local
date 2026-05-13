@@ -36,6 +36,9 @@ type Service struct {
 	project string
 	mu      sync.Mutex
 	verSeq  uint64
+
+	listenerMu sync.Mutex
+	listeners  []*listener
 }
 
 func New(store state.Store, cfg *config.Config) (*Service, error) {
@@ -119,6 +122,7 @@ func (f *firestoreServer) CreateDocument(_ context.Context, req *pb.CreateDocume
 	if err := f.svc.putDoc(d); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+	f.svc.broadcastChange(d)
 	return toProtoDoc(d), nil
 }
 
@@ -153,6 +157,7 @@ func (f *firestoreServer) UpdateDocument(_ context.Context, req *pb.UpdateDocume
 	if err := f.svc.putDoc(d); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+	f.svc.broadcastChange(d)
 	return toProtoDoc(d), nil
 }
 
@@ -163,6 +168,7 @@ func (f *firestoreServer) DeleteDocument(_ context.Context, req *pb.DeleteDocume
 		}
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+	f.svc.broadcastDelete(req.GetName())
 	return &emptypb.Empty{}, nil
 }
 
@@ -180,8 +186,11 @@ func (f *firestoreServer) Commit(_ context.Context, req *pb.CommitRequest) (*pb.
 	now := time.Now().UTC()
 	writeResults := []*pb.WriteResult{}
 	atomic.AddUint64(&f.svc.verSeq, 1)
+	// Collect mutations under the lock; broadcast after we release it so
+	// listener fan-out can't deadlock on a listener that's slow to drain.
+	var changes []*storedDoc
+	var deletes []string
 	f.svc.mu.Lock()
-	defer f.svc.mu.Unlock()
 	for _, wr := range req.GetWrites() {
 		switch op := wr.GetOperation().(type) {
 		case *pb.Write_Update:
@@ -189,6 +198,7 @@ func (f *firestoreServer) Commit(_ context.Context, req *pb.CommitRequest) (*pb.
 			name := doc.GetName()
 			fields, err := marshalFields(doc.GetFields())
 			if err != nil {
+				f.svc.mu.Unlock()
 				return nil, status.Error(codes.Internal, err.Error())
 			}
 			existing, _ := f.svc.getDoc(name)
@@ -214,15 +224,26 @@ func (f *firestoreServer) Commit(_ context.Context, req *pb.CommitRequest) (*pb.
 				d = &storedDoc{Name: name, Fields: fields, CreateTime: now, UpdateTime: now}
 			}
 			if err := f.svc.putDoc(d); err != nil {
+				f.svc.mu.Unlock()
 				return nil, status.Error(codes.Internal, err.Error())
 			}
+			changes = append(changes, d)
 			writeResults = append(writeResults, &pb.WriteResult{UpdateTime: timestamppb.New(d.UpdateTime)})
 		case *pb.Write_Delete:
-			_ = f.svc.store.Delete(nsDocs, op.Delete)
+			if err := f.svc.store.Delete(nsDocs, op.Delete); err == nil {
+				deletes = append(deletes, op.Delete)
+			}
 			writeResults = append(writeResults, &pb.WriteResult{UpdateTime: timestamppb.New(now)})
 		default:
 			writeResults = append(writeResults, &pb.WriteResult{UpdateTime: timestamppb.New(now)})
 		}
+	}
+	f.svc.mu.Unlock()
+	for _, d := range changes {
+		f.svc.broadcastChange(d)
+	}
+	for _, name := range deletes {
+		f.svc.broadcastDelete(name)
 	}
 	return &pb.CommitResponse{
 		WriteResults: writeResults,

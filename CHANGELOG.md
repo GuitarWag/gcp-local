@@ -10,6 +10,13 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ### Added
 
+- **Firestore: Listen streaming RPC.** `DocumentRef.Snapshots()` and
+  `Query.Snapshots()` from the real `cloud.google.com/go/firestore` SDK now
+  work end-to-end. Listeners receive an initial state snapshot (`ADD` →
+  `DocumentChange|DocumentDelete`* → `CURRENT` → `NO_CHANGE`), then live
+  updates as docs are created, updated, or deleted. Where/OrderBy filters
+  on query targets are ignored for now (the listener fires on any change
+  in the collection, matching how `RunQuery` already behaves). Closes #5.
 - **Storage: XML API write + chunked resumable uploads.** `PUT /{bucket}/{object}`
   now uploads via the XML path (used by the Python google-cloud-storage SDK
   in some configurations). The resumable upload handler now parses

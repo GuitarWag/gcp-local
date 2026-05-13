@@ -257,7 +257,7 @@ services:
 | KMS              | working           | AES-GCM encrypt/decrypt with generated key material. |
 | Cloud Logging    | working           | `WriteLogEntries` + `ListLogEntries`.              |
 | Cloud Monitoring | working           | `CreateTimeSeries` + `ListTimeSeries`.             |
-| Firestore        | working (subset)  | gRPC: `Commit`, `GetDocument`, `RunQuery`, `BatchWrite`. No `Listen` streaming. |
+| Firestore        | working (subset)  | gRPC: `Commit`, `GetDocument`, `RunQuery`, `BatchWrite`, `Listen` streaming (DocumentRef + Query snapshots, no Where/OrderBy filters). |
 | BigQuery         | working (subset)  | SQLite backend. REST datasets/tables/insertAll/queries. Typed column schema. |
 | Memorystore      | working           | miniredis on its own port. Disabled by default.    |
 | Cloud Run        | partial           | REST CRUD + invoke proxy to `backendUrl`. No subprocess execution. |
