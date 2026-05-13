@@ -10,6 +10,12 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ### Added
 
+- **Cloud Tasks: scheduleTime + retry on 5xx.** Task HTTP dispatch now waits
+  until `scheduleTime` before firing and retries non-2xx/transport failures
+  with exponential backoff (base 100ms, cap 30s) up to 5 attempts; 2xx/3xx
+  short-circuits the loop and 4xx is treated as non-retryable. `Stop()`
+  cancels pending and in-flight retries via the existing `inflight`
+  WaitGroup. Closes #15.
 - **Firestore: Listen streaming RPC.** `DocumentRef.Snapshots()` and
   `Query.Snapshots()` from the real `cloud.google.com/go/firestore` SDK now
   work end-to-end. Listeners receive an initial state snapshot (`ADD` →
