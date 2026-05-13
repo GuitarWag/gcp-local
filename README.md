@@ -255,7 +255,7 @@ services:
 | Cloud Tasks      | working           | Queue CRUD + HTTP dispatch to target URL.          |
 | Cloud Scheduler  | working           | Standard 5-field cron (`0 9 * * 1-5`), `@every <dur>`, and legacy `every <dur>`. |
 | KMS              | working           | AES-GCM encrypt/decrypt with generated key material. |
-| Cloud Logging    | working           | `WriteLogEntries` + `ListLogEntries`.              |
+| Cloud Logging    | working           | `WriteLogEntries` + `ListLogEntries` with filter subset (`severity`, `logName`, `resource.type`, `resource.labels.*`, `timestamp`, `AND`). |
 | Cloud Monitoring | working           | `CreateTimeSeries` + `ListTimeSeries`.             |
 | Firestore        | working (subset)  | gRPC: `Commit`, `GetDocument`, `RunQuery`, `BatchWrite`, `Listen` streaming (DocumentRef + Query snapshots, no Where/OrderBy filters). |
 | BigQuery         | working (subset)  | SQLite backend. REST datasets/tables/insertAll/queries. Typed column schema. |
