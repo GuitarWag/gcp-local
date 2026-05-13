@@ -1,8 +1,16 @@
 # Changelog
 
-All notable changes to this project. Dates are calendar dates.
+All notable changes to this project will be documented in this file.
 
-## [Unreleased] - 2026-05-13
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+Until 1.0.0, breaking changes may land in minor releases.
+
+## [Unreleased]
+
+## [0.1.0] - 2026-05-13
+
+First public release.
 
 ### Added — milestone M1 (foundation)
 
@@ -128,15 +136,18 @@ All notable changes to this project. Dates are calendar dates.
 - 20 TypeScript tests covering the same surface via REST + Firestore /
   Pub/Sub SDK clients.
 
-### Known gaps / divergences from `prd.md`
+### Known gaps / divergences from `specs/001-foundation.md`
 
 - BigQuery uses SQLite, not DuckDB.
-- CloudSQL: no actual database engine (PRD called for pgembedded or a
+- CloudSQL: no actual database engine (the spec called for pgembedded or a
   SQLite-with-Postgres shim).
 - Bigtable + Spanner data paths return `UNIMPLEMENTED`.
 - Cloud Run + Cloud Functions do not spawn subprocesses; they only proxy
   to a pre-configured backend URL.
 - Dataflow, Vertex AI, AlloyDB, Cloud SQL MySQL: not implemented.
-- Routing is URL-prefix based, not Host-header based as the PRD describes
+- Routing is URL-prefix based, not Host-header based as the spec describes
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
+
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.1.0
