@@ -95,15 +95,25 @@ func (s *Service) handleList(w http.ResponseWriter, r *http.Request) {
 	}
 	var req listRequest
 	_ = json.NewDecoder(r.Body).Decode(&req)
+	pred, err := parseFilter(req.Filter)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid filter: "+err.Error())
+		return
+	}
 	all, _ := s.store.List(nsEntries, "")
 	out := listResponse{Entries: []logEntry{}}
 	for _, v := range all {
 		var e logEntry
-		if json.Unmarshal(v, &e) == nil {
-			if matchFilter(req, e) {
-				out.Entries = append(out.Entries, e)
-			}
+		if json.Unmarshal(v, &e) != nil {
+			continue
 		}
+		if !matchResourceNames(req, e) {
+			continue
+		}
+		if !pred(e) {
+			continue
+		}
+		out.Entries = append(out.Entries, e)
 	}
 	if req.PageSize > 0 && len(out.Entries) > req.PageSize {
 		out.Entries = out.Entries[:req.PageSize]
@@ -111,7 +121,7 @@ func (s *Service) handleList(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-func matchFilter(req listRequest, e logEntry) bool {
+func matchResourceNames(req listRequest, e logEntry) bool {
 	if len(req.ResourceNames) == 0 {
 		return true
 	}

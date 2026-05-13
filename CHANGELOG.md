@@ -10,6 +10,13 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ### Added
 
+- **Cloud Logging: `ListLogEntries` filter parsing.** The `filter` field on
+  list requests is now parsed and applied instead of silently ignored. Supports
+  `severity` comparisons against standard Cloud Logging levels (DEFAULT…
+  EMERGENCY), `logName`, `resource.type`, `resource.labels.<key>`, and
+  `timestamp` (RFC3339) with `AND` between predicates. Unsupported syntax
+  (OR, NOT, parens, regex, functions) returns 400 with a clear message
+  rather than over-returning. Closes #13.
 - **Firestore: Listen streaming RPC.** `DocumentRef.Snapshots()` and
   `Query.Snapshots()` from the real `cloud.google.com/go/firestore` SDK now
   work end-to-end. Listeners receive an initial state snapshot (`ADD` →
