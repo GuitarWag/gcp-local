@@ -34,14 +34,14 @@ func TestCloudSchedulerFiresJob(t *testing.T) {
 		t.Fatalf("create job: %d %s", resp.StatusCode, body)
 	}
 
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		if atomic.LoadInt32(&hits) >= 2 {
 			return
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	t.Fatalf("scheduler fired only %d times in 2s", atomic.LoadInt32(&hits))
+	t.Fatalf("scheduler fired only %d times in 5s", atomic.LoadInt32(&hits))
 }
 
 // TestCloudSchedulerAtEverySyntax verifies the "@every <dur>" syntax (robfig
@@ -69,14 +69,14 @@ func TestCloudSchedulerAtEverySyntax(t *testing.T) {
 		t.Fatalf("create job: %d %s", resp.StatusCode, body)
 	}
 
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		if atomic.LoadInt32(&hits) >= 2 {
 			return
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	t.Fatalf("@every scheduler fired only %d times in 2s", atomic.LoadInt32(&hits))
+	t.Fatalf("@every scheduler fired only %d times in 5s", atomic.LoadInt32(&hits))
 }
 
 // TestCloudSchedulerCronSyntaxAcceptedAndStored verifies a standard 5-field

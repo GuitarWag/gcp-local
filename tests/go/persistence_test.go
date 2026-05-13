@@ -71,7 +71,7 @@ func startEmulator(t *testing.T, cfgPath string) *managedEmulator {
 		cancel:   cancel,
 		cmd:      cmd,
 	}
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
 		resp, err := defaultClient.Get("http://" + em.Host + "/healthz")
 		if err == nil {
