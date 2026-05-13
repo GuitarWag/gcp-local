@@ -14,7 +14,15 @@ type Config struct {
 	StateDir      string         `yaml:"state_dir"`
 	Dashboard     bool           `yaml:"dashboard"`
 	DashboardPort int            `yaml:"dashboard_port"`
+	TLS           TLS            `yaml:"tls"`
 	Services      ServicesConfig `yaml:"services"`
+}
+
+// TLS controls whether the gateway listens over HTTPS. Disabled by default.
+type TLS struct {
+	Enabled  bool   `yaml:"enabled"`
+	CertFile string `yaml:"cert_file"`
+	KeyFile  string `yaml:"key_file"`
 }
 
 type ServicesConfig struct {
