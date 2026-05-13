@@ -1,6 +1,8 @@
 package pubsub
 
 import (
+	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -96,13 +98,30 @@ type Service struct {
 
 	msgSeq uint64
 	ackSeq uint64
+
+	// Push delivery: one goroutine per push subscription. pushers maps
+	// subscription name to its cancel func so DeleteSubscription / Stop can
+	// reach in and tear individual workers down.
+	pushClient *http.Client
+	ctx        context.Context
+	cancel     context.CancelFunc
+	pushWG     sync.WaitGroup
+	pushMu     sync.Mutex
+	pushers    map[string]context.CancelFunc
+	pushPoll   time.Duration // poll interval; small constant in production, tunable in tests
 }
 
 func New(store state.Store, cfg *config.Config) (*Service, error) {
+	ctx, cancel := context.WithCancel(context.Background())
 	s := &Service{
-		store:   store,
-		project: cfg.Project,
-		queues:  map[string][]storedMessage{},
+		store:      store,
+		project:    cfg.Project,
+		queues:     map[string][]storedMessage{},
+		pushClient: &http.Client{Timeout: 5 * time.Second},
+		ctx:        ctx,
+		cancel:     cancel,
+		pushers:    map[string]context.CancelFunc{},
+		pushPoll:   50 * time.Millisecond,
 	}
 	for _, t := range cfg.Services.PubSub.Topics {
 		topicName := fmt.Sprintf("projects/%s/topics/%s", cfg.Project, t.Name)
@@ -122,9 +141,22 @@ func New(store state.Store, cfg *config.Config) (*Service, error) {
 			if err := s.putSubscription(res); err != nil {
 				return nil, fmt.Errorf("seed subscription %s: %w", sub.Name, err)
 			}
+			if res.PushConfig != nil {
+				s.startPusher(res)
+			}
 		}
 	}
 	return s, nil
+}
+
+// Stop cancels all push-delivery goroutines and waits for them to exit.
+// Safe to call once; subsequent calls are no-ops because cancel idempotently
+// closes the context.
+func (s *Service) Stop() {
+	if s.cancel != nil {
+		s.cancel()
+	}
+	s.pushWG.Wait()
 }
 
 func (s *Service) Name() string { return "pubsub" }
@@ -285,7 +317,13 @@ func (s *Service) CreateSubscription(name, topic string, ackDeadline int, pushUR
 	if pushURL != "" {
 		res.PushConfig = &pushConfig{PushEndpoint: pushURL}
 	}
-	return s.putSubscription(res)
+	if err := s.putSubscription(res); err != nil {
+		return err
+	}
+	if res.PushConfig != nil {
+		s.startPusher(res)
+	}
+	return nil
 }
 
 func (s *Service) GetSubscription(name string) (string, int, error) {
@@ -302,6 +340,7 @@ func (s *Service) DeleteSubscription(name string) error {
 	if err := s.store.Delete(nsSubscriptions, name); err != nil {
 		return ErrSubMissing
 	}
+	s.stopPusher(name)
 	s.mu.Lock()
 	delete(s.queues, name)
 	s.mu.Unlock()
@@ -515,6 +554,9 @@ func (s *Service) handleSubscription(w http.ResponseWriter, r *http.Request, nam
 			s.writeErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		if body.PushConfig != nil && body.PushConfig.PushEndpoint != "" {
+			s.startPusher(body)
+		}
 		s.writeJSON(w, http.StatusOK, body)
 	case http.MethodGet:
 		data, err := s.store.Get(nsSubscriptions, name)
@@ -530,6 +572,7 @@ func (s *Service) handleSubscription(w http.ResponseWriter, r *http.Request, nam
 			s.writeErr(w, http.StatusNotFound, "subscription not found")
 			return
 		}
+		s.stopPusher(name)
 		s.mu.Lock()
 		delete(s.queues, name)
 		s.mu.Unlock()
@@ -648,4 +691,161 @@ func (s *Service) modifyAckDeadline(w http.ResponseWriter, r *http.Request, subN
 // DecodeData is exposed for tests; pub/sub message bodies are base64 in the REST API.
 func DecodeData(s string) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(s)
+}
+
+// pushEnvelope mirrors the real Pub/Sub push payload:
+//
+//	{"message": {<PubsubMessage>}, "subscription": "<full sub name>"}
+//
+// see https://cloud.google.com/pubsub/docs/push#receive_push.
+type pushEnvelope struct {
+	Message      pubsubMessage `json:"message"`
+	Subscription string        `json:"subscription"`
+}
+
+// startPusher launches the per-subscription delivery goroutine. Safe to call
+// repeatedly for the same sub; duplicate calls are dropped.
+func (s *Service) startPusher(sub subscriptionResource) {
+	if sub.PushConfig == nil || sub.PushConfig.PushEndpoint == "" {
+		return
+	}
+	s.pushMu.Lock()
+	if _, exists := s.pushers[sub.Name]; exists {
+		s.pushMu.Unlock()
+		return
+	}
+	ctx, cancel := context.WithCancel(s.ctx)
+	s.pushers[sub.Name] = cancel
+	s.pushMu.Unlock()
+
+	s.pushWG.Add(1)
+	go func() {
+		defer s.pushWG.Done()
+		s.runPusher(ctx, sub.Name, sub.PushConfig.PushEndpoint)
+	}()
+}
+
+// stopPusher signals the goroutine for `name` to exit. It does not wait —
+// Stop() does that on shutdown. Lookup-by-name keeps callers from needing
+// to know whether a pusher actually exists.
+func (s *Service) stopPusher(name string) {
+	s.pushMu.Lock()
+	cancel, ok := s.pushers[name]
+	if ok {
+		delete(s.pushers, name)
+	}
+	s.pushMu.Unlock()
+	if ok {
+		cancel()
+	}
+}
+
+// runPusher polls a subscription's queue and POSTs each available message to
+// the configured push endpoint. 2xx → ack (drop from queue). Anything else →
+// extend the in-flight deadline by `backoff` so the message becomes available
+// for retry later. Backoff doubles after each failure, capped at the sub's
+// ack deadline (matching real Pub/Sub's behavior of bounding redelivery
+// timing by the ack deadline).
+func (s *Service) runPusher(ctx context.Context, subName, endpoint string) {
+	const initialBackoff = 100 * time.Millisecond
+	backoff := initialBackoff
+
+	ticker := time.NewTicker(s.pushPoll)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+
+		// Re-read the sub each loop: ackDeadline can change and the sub may
+		// have been deleted out from under us.
+		ackSec, ok := s.subAckSeconds(subName)
+		if !ok {
+			return
+		}
+		maxBackoff := time.Duration(ackSec) * time.Second
+
+		received, err := s.PullMessages(subName, 10)
+		if err != nil {
+			return
+		}
+		if len(received) == 0 {
+			backoff = initialBackoff
+			continue
+		}
+
+		for _, rec := range received {
+			if ctx.Err() != nil {
+				return
+			}
+			if s.deliver(ctx, subName, endpoint, rec) {
+				_ = s.Acknowledge(subName, []string{rec.AckID})
+				backoff = initialBackoff
+				continue
+			}
+			// Failure: hold the message inflight for `backoff` so it
+			// doesn't reappear instantly. Cap at the ack deadline.
+			delay := backoff
+			if delay > maxBackoff {
+				delay = maxBackoff
+			}
+			if delay < time.Second {
+				delay = time.Second // ModifyAckDeadline is integer seconds; use the minimum
+			}
+			_ = s.ModifyAckDeadline(subName, []string{rec.AckID}, int(delay/time.Second))
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+		}
+	}
+}
+
+// deliver POSTs one message envelope to the endpoint. Returns true on 2xx.
+func (s *Service) deliver(ctx context.Context, subName, endpoint string, rec Received) bool {
+	env := pushEnvelope{
+		Subscription: subName,
+		Message: pubsubMessage{
+			Data:        base64.StdEncoding.EncodeToString(rec.Message.Data),
+			Attributes:  rec.Message.Attributes,
+			MessageID:   rec.Message.ID,
+			PublishTime: rec.Message.PublishTime,
+			OrderingKey: rec.Message.OrderingKey,
+		},
+	}
+	body, err := json.Marshal(env)
+	if err != nil {
+		return false
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return false
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := s.pushClient.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode >= 200 && resp.StatusCode < 300
+}
+
+// subAckSeconds looks up the current ack deadline for a subscription. The
+// second return is false if the subscription no longer exists, which the
+// caller uses as an exit signal.
+func (s *Service) subAckSeconds(name string) (int, bool) {
+	data, err := s.store.Get(nsSubscriptions, name)
+	if err != nil {
+		return 0, false
+	}
+	var sub subscriptionResource
+	if err := json.Unmarshal(data, &sub); err != nil {
+		return 0, false
+	}
+	if sub.AckDeadlineSeconds <= 0 {
+		return 10, true
+	}
+	return sub.AckDeadlineSeconds, true
 }
