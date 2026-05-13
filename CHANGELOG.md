@@ -21,6 +21,13 @@ Until 1.0.0, breaking changes may land in minor releases.
   translated: window functions, `STRUCT`, `ARRAY`, `UNNEST`, `PARTITION
   BY`, `WITH RECURSIVE`, BigQuery-specific date arithmetic. Engine remains
   pure-Go SQLite (no DuckDB). Closes #7.
+- **TLS: `--tls` flag + self-signed cert.** `gcp-local start --tls` now serves
+  HTTPS (real HTTP/2 over TLS, no h2c) so SDK clients that hard-code
+  `https://` work without `option.WithoutAuthentication()`. The cert and
+  RSA-2048 key persist at `~/.gcp-local/tls/{cert,key}.pem` and are reused
+  across restarts. Adds `gcp-local trust install` / `trust uninstall` for the
+  macOS login keychain (Linux prints manual instructions; Windows not
+  supported). Stdlib-only — no new dependencies. Closes #10.
 - **Pub/Sub: push subscription delivery.** Subscriptions created with
   `pushConfig.pushEndpoint` now actually POST each message to the endpoint
   as `{"message": {...}, "subscription": "..."}`. 2xx responses ack the

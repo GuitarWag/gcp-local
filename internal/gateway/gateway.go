@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net/http"
@@ -341,15 +342,32 @@ func (g *Gateway) handler() http.Handler {
 
 func (g *Gateway) Run(ctx context.Context) error {
 	addr := fmt.Sprintf(":%d", g.cfg.Port)
-	h2s := &http2.Server{}
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           h2c.NewHandler(g.handler(), h2s),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
+	if g.cfg.TLS.Enabled {
+		// Real HTTP/2 over TLS. NextProtos must include "h2" so gRPC clients
+		// keep working when they negotiate ALPN.
+		srv.Handler = g.handler()
+		srv.TLSConfig = &tls.Config{
+			NextProtos: []string{"h2", "http/1.1"},
+			MinVersion: tls.VersionTLS12,
+		}
+	} else {
+		// h2c — HTTP/2 cleartext over a plain HTTP listener.
+		h2s := &http2.Server{}
+		srv.Handler = h2c.NewHandler(g.handler(), h2s)
+	}
+
 	errCh := make(chan error, 1)
 	go func() {
-		err := srv.ListenAndServe()
+		var err error
+		if g.cfg.TLS.Enabled {
+			err = srv.ListenAndServeTLS(g.cfg.TLS.CertFile, g.cfg.TLS.KeyFile)
+		} else {
+			err = srv.ListenAndServe()
+		}
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}

@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
@@ -10,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -17,6 +19,7 @@ import (
 type Emulator struct {
 	Host   string
 	Port   int
+	TLS    bool
 	cmd    *exec.Cmd
 	cancel context.CancelFunc
 }
@@ -34,12 +37,28 @@ func freePort(t *testing.T) int {
 // Start launches gcp-local on a random free port and waits until it's ready.
 // Caller must have built a binary at the path returned by BinaryPath().
 func Start(t *testing.T) *Emulator {
+	return StartArgs(t)
+}
+
+// StartArgs is like Start but threads extra CLI flags (for example "--tls")
+// through to the gcp-local binary. The "--port" and "--no-daemon" flags are
+// added automatically. If "--tls" appears in extraArgs the readiness probe
+// switches to HTTPS with InsecureSkipVerify.
+func StartArgs(t *testing.T, extraArgs ...string) *Emulator {
 	t.Helper()
 	binPath := BinaryPath(t)
 	port := freePort(t)
 	ctx, cancel := context.WithCancel(context.Background())
 
-	cmd := exec.CommandContext(ctx, binPath, "start", "--port="+strconv.Itoa(port), "--no-daemon")
+	useTLS := false
+	for _, a := range extraArgs {
+		if a == "--tls" || strings.HasPrefix(a, "--tls=") {
+			useTLS = true
+		}
+	}
+
+	cmdArgs := append([]string{"start", "--port=" + strconv.Itoa(port), "--no-daemon"}, extraArgs...)
+	cmd := exec.CommandContext(ctx, binPath, cmdArgs...)
 	// Discard the child's stdio. Inheriting the test runner's stderr keeps
 	// the I/O pipes open after the child exits and trips go test's
 	// WaitDelay under parallel CI execution.
@@ -51,12 +70,12 @@ func Start(t *testing.T) *Emulator {
 	}
 
 	host := fmt.Sprintf("localhost:%d", port)
-	if err := waitReady(host, 5*time.Second); err != nil {
+	if err := waitReadyScheme(host, useTLS, 10*time.Second); err != nil {
 		_ = cmd.Process.Kill()
 		cancel()
 		t.Fatalf("gcp-local not ready: %v", err)
 	}
-	em := &Emulator{Host: host, Port: port, cmd: cmd, cancel: cancel}
+	em := &Emulator{Host: host, Port: port, TLS: useTLS, cmd: cmd, cancel: cancel}
 	t.Cleanup(em.Stop)
 	return em
 }
@@ -72,14 +91,32 @@ func (e *Emulator) Stop() {
 }
 
 func (e *Emulator) URL(path string) string {
-	return "http://" + e.Host + path
+	scheme := "http"
+	if e.TLS {
+		scheme = "https"
+	}
+	return scheme + "://" + e.Host + path
 }
 
 func waitReady(host string, timeout time.Duration) error {
+	return waitReadyScheme(host, false, timeout)
+}
+
+func waitReadyScheme(host string, useTLS bool, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	client := &http.Client{Timeout: 500 * time.Millisecond}
+	scheme := "http"
+	if useTLS {
+		scheme = "https"
+		client = &http.Client{
+			Timeout: 500 * time.Millisecond,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
+			},
+		}
+	}
 	for time.Now().Before(deadline) {
-		resp, err := client.Get("http://" + host + "/healthz")
+		resp, err := client.Get(scheme + "://" + host + "/healthz")
 		if err == nil {
 			_ = resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {

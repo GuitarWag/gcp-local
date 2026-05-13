@@ -44,7 +44,7 @@ dashboard.
   variables.
 - Persists state to BoltDB or keeps it in memory, your choice.
 - Boots in ~50 ms. Restarts cleanly. Resets state on demand.
-- Has 102 integration tests using the real SDK clients, including
+- Has 130 integration tests using the real SDK clients, including
   race-detector-clean concurrency tests.
 
 ---
@@ -203,10 +203,13 @@ No CGo. Builds on macOS and Linux with stock Go ≥ 1.25.
 ```bash
 gcp-local start                  # daemon mode, port 4443
 gcp-local start --no-daemon      # foreground (CI-friendly)
+gcp-local start --tls            # HTTPS with a self-signed cert
 gcp-local status                 # readiness summary
 gcp-local env                    # print exports for the current shell
 gcp-local stop
 gcp-local reset                  # wipe all state
+gcp-local trust install          # add the generated cert to macOS keychain
+gcp-local trust uninstall        # remove it
 ```
 
 ```bash
@@ -287,6 +290,31 @@ A fake service account JSON is written to `~/.gcp-local/fake-creds.json` on
 first start; it satisfies SDK auth checks without contacting Google's token
 endpoint.
 
+## TLS
+
+Default is plain HTTP (h2c). For SDK clients that hard-code `https://`, start
+with `--tls`:
+
+```bash
+gcp-local start --tls
+```
+
+First use generates an RSA-2048 self-signed cert valid for `localhost`,
+`127.0.0.1`, and `::1` under `~/.gcp-local/tls/cert.pem` and `key.pem`. The
+same cert is reused on every subsequent boot (delete the directory to rotate).
+Over TLS the gateway speaks real HTTP/2 (ALPN `h2`), so gRPC clients continue
+to work.
+
+To stop seeing "certificate signed by unknown authority" errors:
+
+```bash
+gcp-local trust install            # macOS: adds cert to login keychain
+gcp-local trust uninstall          # remove it
+```
+
+On Linux the command prints manual `update-ca-certificates` / NSS instructions
+rather than poking system trust stores blindly. Windows is not supported.
+
 ## Architecture
 
 - One HTTP server with h2c. gRPC and REST share one port.
@@ -301,7 +329,7 @@ endpoint.
 ## Tests
 
 ```bash
-# Go (64 tests, race-detector clean)
+# Go (92 tests, race-detector clean)
 cd tests/go && go test -race ./...
 
 # Python (18 tests)
@@ -316,7 +344,7 @@ pnpm install
 pnpm test
 ```
 
-102 integration tests total. Tests use the real GCP client libraries — they
+130 integration tests total. Tests use the real GCP client libraries — they
 exercise the same wire surface your production code will hit.
 
 ## Divergences from the design spec

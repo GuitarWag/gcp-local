@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"github.com/GuitarWag/gcp-local/internal/config"
 	"github.com/GuitarWag/gcp-local/internal/gateway"
 	"github.com/GuitarWag/gcp-local/internal/pidfile"
+	"github.com/GuitarWag/gcp-local/internal/tlsx"
 )
 
 // Build-time identifiers, set via -ldflags by GoReleaser.
@@ -53,6 +55,11 @@ func main() {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)
 		}
+	case "trust":
+		if err := runTrust(args); err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
 	case "version", "-v", "--version":
 		fmt.Printf("gcp-local %s (%s, built %s)\n", version, commit, date)
 	case "-h", "--help", "help":
@@ -68,12 +75,17 @@ func usage() {
 	fmt.Fprint(os.Stderr, `gcp-local — local GCP emulator
 
 Usage:
-  gcp-local start [--port=N] [--config=FILE] [--no-daemon]
+  gcp-local start [--port=N] [--config=FILE] [--no-daemon] [--tls]
   gcp-local env
   gcp-local status
   gcp-local stop
   gcp-local reset [--service=NAME]
+  gcp-local trust install|uninstall
   gcp-local version
+
+Flags:
+  --tls        serve HTTPS using a self-signed cert under ~/.gcp-local/tls/.
+               First use generates the cert; reuses it on subsequent runs.
 `)
 }
 
@@ -82,6 +94,7 @@ func runStart(args []string) error {
 	port := fs.Int("port", 4443, "port to listen on")
 	cfgPath := fs.String("config", "", "config file path")
 	noDaemon := fs.Bool("no-daemon", false, "run in foreground")
+	useTLS := fs.Bool("tls", false, "serve HTTPS using a self-signed cert under ~/.gcp-local/tls/")
 	daemonChild := fs.Bool("__daemon-child", false, "internal: running as daemon child")
 	_ = daemonChild
 	if err := fs.Parse(args); err != nil {
@@ -89,12 +102,25 @@ func runStart(args []string) error {
 	}
 
 	if !*noDaemon && !*daemonChild {
-		return startDaemon(args, *port)
+		return startDaemon(args, *port, *useTLS)
 	}
 
 	cfg, err := loadConfig(*cfgPath, *port)
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
+	}
+
+	if *useTLS {
+		paths, err := tlsx.DefaultPaths()
+		if err != nil {
+			return fmt.Errorf("tls paths: %w", err)
+		}
+		if err := tlsx.EnsureCert(paths); err != nil {
+			return fmt.Errorf("ensure cert: %w", err)
+		}
+		cfg.TLS.Enabled = true
+		cfg.TLS.CertFile = paths.CertFile
+		cfg.TLS.KeyFile = paths.KeyFile
 	}
 
 	credsPath, err := auth.WriteFakeCreds(cfg.Project)
@@ -126,12 +152,16 @@ func runStart(args []string) error {
 		cancel()
 	}()
 
-	fmt.Fprintf(os.Stderr, "gcp-local listening on :%d (project=%s)\n", cfg.Port, cfg.Project)
+	scheme := "http"
+	if cfg.TLS.Enabled {
+		scheme = "https"
+	}
+	fmt.Fprintf(os.Stderr, "gcp-local listening on %s://localhost:%d (project=%s)\n", scheme, cfg.Port, cfg.Project)
 	fmt.Fprintf(os.Stderr, "credentials: %s\n", credsPath)
 	return gw.Run(ctx)
 }
 
-func startDaemon(args []string, port int) error {
+func startDaemon(args []string, port int, useTLS bool) error {
 	// Spawn ourselves with --__daemon-child marker, detached. Wait for /healthz.
 	exe, err := os.Executable()
 	if err != nil {
@@ -151,8 +181,17 @@ func startDaemon(args []string, port int) error {
 		return fmt.Errorf("release: %w", err)
 	}
 	deadline := time.Now().Add(5 * time.Second)
+	scheme := "http"
+	client := http.DefaultClient
+	if useTLS {
+		scheme = "https"
+		// Self-signed cert: skip verification for the readiness probe only.
+		client = &http.Client{Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
+		}}
+	}
 	for time.Now().Before(deadline) {
-		resp, err := http.Get(fmt.Sprintf("http://localhost:%d/healthz", port))
+		resp, err := client.Get(fmt.Sprintf("%s://localhost:%d/healthz", scheme, port))
 		if err == nil {
 			_ = resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
@@ -291,6 +330,24 @@ func loadConfig(path string, portOverride int) (*config.Config, error) {
 		cfg.Port = portOverride
 	}
 	return cfg, nil
+}
+
+func runTrust(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage: gcp-local trust install|uninstall")
+	}
+	paths, err := tlsx.DefaultPaths()
+	if err != nil {
+		return err
+	}
+	switch args[0] {
+	case "install":
+		return tlsx.TrustInstall(paths, os.Stdout)
+	case "uninstall":
+		return tlsx.TrustUninstall(paths, os.Stdout)
+	default:
+		return fmt.Errorf("unknown trust subcommand: %s (expected install|uninstall)", args[0])
+	}
 }
 
 func defaultCredsPath() string {
