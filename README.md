@@ -174,19 +174,31 @@ gcp-local start --config=repro.yaml
 
 ## Install
 
+**One-line installer** (macOS and Linux, amd64 and arm64):
+
+```bash
+curl -sSL https://raw.githubusercontent.com/GuitarWag/gcp-local/main/install.sh | sh
+```
+
+The script downloads the matching pre-built binary from the latest release
+and drops it in `/usr/local/bin` (or `~/.local/bin` if you can't write there).
+
+**Manual download** — grab the right `tar.gz` from
+[the releases page](https://github.com/GuitarWag/gcp-local/releases/latest):
+
+```bash
+# Example for macOS arm64; swap arch/os for your machine.
+curl -L https://github.com/GuitarWag/gcp-local/releases/latest/download/gcp-local_0.2.0_darwin_arm64.tar.gz | tar xz
+sudo mv gcp-local /usr/local/bin/
+```
+
 **Go users:**
 
 ```bash
 go install github.com/GuitarWag/gcp-local/cmd/gcp-local@latest
 ```
 
-**Pre-built binaries** for macOS and Linux (amd64 + arm64) on each release:
-
-```
-https://github.com/GuitarWag/gcp-local/releases/latest
-```
-
-Download the matching `tar.gz`, extract, drop the binary on your `PATH`.
+Then make sure `$(go env GOPATH)/bin` is on your `PATH`.
 
 **From source:**
 
