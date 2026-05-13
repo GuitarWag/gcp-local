@@ -2,6 +2,7 @@ package gcplocaltest
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -59,8 +60,8 @@ func startEmulator(t *testing.T, cfgPath string) *managedEmulator {
 		"--config="+cfgPath,
 		"--no-daemon",
 	)
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
 	if err := cmd.Start(); err != nil {
 		cancel()
 		t.Fatalf("start: %v", err)

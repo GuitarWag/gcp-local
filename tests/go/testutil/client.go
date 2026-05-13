@@ -3,6 +3,7 @@ package testutil
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -39,8 +40,11 @@ func Start(t *testing.T) *Emulator {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	cmd := exec.CommandContext(ctx, binPath, "start", "--port="+strconv.Itoa(port), "--no-daemon")
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
+	// Discard the child's stdio. Inheriting the test runner's stderr keeps
+	// the I/O pipes open after the child exits and trips go test's
+	// WaitDelay under parallel CI execution.
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
 	if err := cmd.Start(); err != nil {
 		cancel()
 		t.Fatalf("failed to start gcp-local: %v", err)
