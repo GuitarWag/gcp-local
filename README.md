@@ -6,7 +6,10 @@
 GCP project, no internet. Point your existing SDK code at `localhost`, get on
 with your day.
 
-Think LocalStack for AWS — but for GCP, written in pure Go, and a single
+If you've used [LocalStack](https://www.localstack.cloud/),
+[ministack](https://github.com/ministackorg/ministack), or
+[floci](https://github.com/floci-io/floci) for AWS, `gcp-local` is the GCP
+counterpart — same model, different cloud, written in pure Go as a single
 download.
 
 ```bash
@@ -317,6 +320,22 @@ matches it with these explicit gaps:
   subprocess execution.
 - Dataflow, Vertex AI, AlloyDB, Cloud SQL MySQL — not implemented.
 - Default state backend is `memory`, not `boltdb`.
+
+## Related projects
+
+For AWS, the same idea has been done well by several teams. If you work on
+mixed AWS/GCP stacks you'll likely want both:
+
+- **[LocalStack](https://www.localstack.cloud/)** — the original local AWS
+  emulator. Python, Docker-based, broad service coverage. Open core + paid tiers.
+- **[ministack](https://github.com/ministackorg/ministack)** — open-source local
+  AWS emulator. 40+ services, Terraform compatible, real databases. MIT.
+- **[floci](https://github.com/floci-io/floci)** — Java-based AWS local
+  emulator, also positioned as a LocalStack alternative.
+
+`gcp-local` covers Google Cloud only and is intentionally smaller in scope —
+single Go binary, no Docker, no Java, no plugin system. Use it alongside one
+of the above if your stack spans both clouds.
 
 ## License
 
