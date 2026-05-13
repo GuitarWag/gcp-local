@@ -63,6 +63,23 @@ session.
 
 Tests are integration-only (no unit tests). Race detector should stay clean.
 
+### Pre-push gate (run all five, no shortcuts)
+
+Run the full gate locally before every `git push`. CI catches things, but
+catching them locally is the whole point of having a three-language harness.
+
+```bash
+go vet ./...
+gofmt -l internal/ cmd/   # must print nothing
+(cd tests/go && go test -race -count=1 ./...)
+(cd tests/python && .venv/bin/python -m pytest -q)
+(cd tests/typescript && pnpm test)
+```
+
+If any step fails, fix it and re-run the whole gate. Don't push partial.
+Don't trust CI to be the first signal — by the time CI fails, you've
+already shipped the breakage to `main`.
+
 ## Conventions
 
 - Real GCP SDKs are the compatibility target. When in doubt, run the real
