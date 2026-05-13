@@ -397,7 +397,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// BigQuery refers to tables as `project.dataset.table`. SQLite expects "dataset__table".
-	q := translateBQ(body.Query)
+	q := s.translateBQ(body.Query)
 	rows, err := s.db.Query(q)
 	if err != nil {
 		s.writeErr(w, http.StatusBadRequest, err.Error())
@@ -521,24 +521,181 @@ func sqliteToBQType(t string) string {
 	}
 }
 
-// translateBQ rewrites table references from `project.dataset.table` or `dataset.table`
-// to the SQLite name `dataset__table`. Coarse but enough for simple tests.
-func translateBQ(q string) string {
-	// Replace `project.dataset.table` → "dataset__table".
-	out := q
-	// Strip leading project prefix if present.
-	// Look for backticks first.
-	out = strings.ReplaceAll(out, "`", "")
-	parts := strings.Fields(out)
-	for i, p := range parts {
-		if strings.Contains(p, ".") && !strings.Contains(p, "(") && !strings.HasSuffix(p, ",") {
-			segs := strings.Split(p, ".")
-			if len(segs) == 3 {
-				parts[i] = fmt.Sprintf("%q", segs[1]+"__"+segs[2])
-			} else if len(segs) == 2 {
-				parts[i] = fmt.Sprintf("%q", segs[0]+"__"+segs[1])
+// translateBQ rewrites BigQuery-flavoured SQL into SQLite-flavoured SQL.
+// Specifically:
+//   - Table references `project.dataset.table` or `dataset.table` are
+//     rewritten to "dataset__table" when `dataset` is a known dataset id.
+//   - Backticks around references are stripped.
+//   - A small set of BigQuery scalar functions is mapped to SQLite
+//     equivalents (see translateBQFunctions).
+//
+// Column-qualified references like `t.col` (where `t` is an alias) are
+// left untouched, as are bare aggregate calls like `COUNT(*)`, `SUM(x)`,
+// `GROUP BY`, `HAVING`, `ORDER BY`, and `JOIN ... ON`.
+func (s *Service) translateBQ(q string) string {
+	known := s.knownDatasets()
+	q = translateBQFunctions(q)
+	q = translateBQTables(q, known)
+	return q
+}
+
+// knownDatasets returns the set of dataset IDs registered on the service,
+// used to disambiguate `dataset.table` from `alias.column` in queries.
+func (s *Service) knownDatasets() map[string]struct{} {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make(map[string]struct{}, len(s.datasets))
+	for id := range s.datasets {
+		out[id] = struct{}{}
+	}
+	return out
+}
+
+// bqRefToken matches a dotted identifier sequence, optionally wrapped in
+// backticks. We intentionally restrict to [A-Za-z_][A-Za-z0-9_-]* segments
+// so we don't accidentally rewrite numeric literals like 1.5 or 3.14e10.
+var bqRefToken = regexp.MustCompile("`?([A-Za-z_][A-Za-z0-9_-]*)\\.([A-Za-z_][A-Za-z0-9_-]*)(?:\\.([A-Za-z_][A-Za-z0-9_-]*))?`?")
+
+// translateBQTables rewrites `dataset.table` or `project.dataset.table` to
+// the SQLite physical table name "dataset__table", but only when the
+// dataset segment is in `known`. Other dotted references (alias.column,
+// numeric literals) are left as-is.
+func translateBQTables(q string, known map[string]struct{}) string {
+	return bqRefToken.ReplaceAllStringFunc(q, func(m string) string {
+		sub := bqRefToken.FindStringSubmatch(m)
+		// sub[1]=first, sub[2]=second, sub[3]=third (or "")
+		first, second, third := sub[1], sub[2], sub[3]
+		hadBackticks := strings.HasPrefix(m, "`") || strings.HasSuffix(m, "`")
+		if third != "" {
+			// project.dataset.table — keep if middle segment is known dataset.
+			if _, ok := known[second]; ok {
+				return fmt.Sprintf("%q", second+"__"+third)
+			}
+			// Unknown: strip backticks but don't rewrite.
+			if hadBackticks {
+				return first + "." + second + "." + third
+			}
+			return m
+		}
+		// dataset.table
+		if _, ok := known[first]; ok {
+			return fmt.Sprintf("%q", first+"__"+second)
+		}
+		if hadBackticks {
+			return first + "." + second
+		}
+		return m
+	})
+}
+
+// translateBQFunctions rewrites a small set of BigQuery scalar functions
+// to SQLite-compatible forms. The set is deliberately small; complex
+// surfaces (windows, STRUCT, ARRAY, UNNEST, PARTITION BY, WITH RECURSIVE,
+// and BigQuery-specific date arithmetic) are NOT translated.
+//
+// Divergences from BigQuery:
+//   - SAFE_CAST is translated to CAST. BigQuery returns NULL on cast
+//     failure; SQLite raises (or coerces). We accept the looser semantics
+//     for v1.
+//   - CONCAT is translated to `||` concatenation. SQLite's `||` returns
+//     NULL if any operand is NULL, which matches BigQuery's CONCAT.
+func translateBQFunctions(q string) string {
+	q = rewriteCurrentTimestamp(q)
+	q = rewriteSafeCast(q)
+	q = rewriteConcat(q)
+	return q
+}
+
+var (
+	reCurrentTimestamp = regexp.MustCompile(`(?i)CURRENT_TIMESTAMP\s*\(\s*\)`)
+	reSafeCastOpen     = regexp.MustCompile(`(?i)SAFE_CAST\s*\(`)
+	reConcatOpen       = regexp.MustCompile(`(?i)\bCONCAT\s*\(`)
+)
+
+func rewriteCurrentTimestamp(q string) string {
+	return reCurrentTimestamp.ReplaceAllString(q, "CURRENT_TIMESTAMP")
+}
+
+func rewriteSafeCast(q string) string {
+	// SAFE_CAST(x AS T) → CAST(x AS T). The inner expression is left
+	// untouched; SQLite parses CAST(x AS T) the same way.
+	return reSafeCastOpen.ReplaceAllString(q, "CAST(")
+}
+
+// rewriteConcat replaces CONCAT(a, b, c, ...) with (a || b || c || ...).
+// It walks the string, finds each CONCAT( occurrence, scans forward to the
+// matching close paren respecting nesting and single-quoted string
+// literals, then splits the inner args on top-level commas.
+func rewriteConcat(q string) string {
+	for {
+		loc := reConcatOpen.FindStringIndex(q)
+		if loc == nil {
+			return q
+		}
+		openParen := loc[1] - 1 // index of '('
+		end, args, ok := splitTopLevelArgs(q, openParen)
+		if !ok {
+			// Unbalanced — bail out and let SQLite report the error.
+			return q
+		}
+		if len(args) < 2 {
+			// CONCAT(x) is just x; CONCAT() is illegal in BigQuery too.
+			// Wrap as (x) so downstream tokenisation stays sane.
+			q = q[:loc[0]] + "(" + strings.Join(args, " ") + ")" + q[end+1:]
+			continue
+		}
+		joined := "(" + strings.Join(args, " || ") + ")"
+		q = q[:loc[0]] + joined + q[end+1:]
+	}
+}
+
+// splitTopLevelArgs assumes s[open] == '('. It returns the index of the
+// matching ')', the argument strings (trimmed), and ok=true on success.
+func splitTopLevelArgs(s string, open int) (int, []string, bool) {
+	depth := 0
+	inSingle := false
+	inDouble := false
+	inBacktick := false
+	start := open + 1
+	var args []string
+	for i := open; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case inSingle:
+			if c == '\'' {
+				inSingle = false
+			}
+		case inDouble:
+			if c == '"' {
+				inDouble = false
+			}
+		case inBacktick:
+			if c == '`' {
+				inBacktick = false
+			}
+		default:
+			switch c {
+			case '\'':
+				inSingle = true
+			case '"':
+				inDouble = true
+			case '`':
+				inBacktick = true
+			case '(':
+				depth++
+			case ')':
+				depth--
+				if depth == 0 {
+					args = append(args, strings.TrimSpace(s[start:i]))
+					return i, args, true
+				}
+			case ',':
+				if depth == 1 {
+					args = append(args, strings.TrimSpace(s[start:i]))
+					start = i + 1
+				}
 			}
 		}
 	}
-	return strings.Join(parts, " ")
+	return 0, nil, false
 }
