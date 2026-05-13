@@ -8,6 +8,14 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+### Added
+
+- **Scheduler: standard cron syntax.** Jobs now accept full 5-field cron
+  expressions (`0 9 * * 1-5`) and `@every <duration>` shorthand via
+  `robfig/cron/v3`. The legacy `every <duration>` form is still accepted
+  for backwards compatibility — it's rewritten to `@every` internally.
+  Closes #9.
+
 ## [0.1.0] - 2026-05-13
 
 First public release.

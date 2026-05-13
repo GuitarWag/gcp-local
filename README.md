@@ -243,7 +243,7 @@ services:
 | Pub/Sub          | working           | REST + full gRPC incl `StreamingPull`. Ack deadlines, nack, modAck redelivery. |
 | Secret Manager   | working           | Full CRUD + versions + access. Cascade-delete versions. |
 | Cloud Tasks      | working           | Queue CRUD + HTTP dispatch to target URL.          |
-| Cloud Scheduler  | working           | Ticker; schedule format is `every Nms/s/m/h` (subset). |
+| Cloud Scheduler  | working           | Standard 5-field cron (`0 9 * * 1-5`), `@every <dur>`, and legacy `every <dur>`. |
 | KMS              | working           | AES-GCM encrypt/decrypt with generated key material. |
 | Cloud Logging    | working           | `WriteLogEntries` + `ListLogEntries`.              |
 | Cloud Monitoring | working           | `CreateTimeSeries` + `ListTimeSeries`.             |

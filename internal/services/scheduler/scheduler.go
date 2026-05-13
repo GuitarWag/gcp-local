@@ -12,9 +12,18 @@ import (
 	"sync"
 	"time"
 
+	"github.com/robfig/cron/v3"
+
 	"github.com/GuitarWag/gcp-local/internal/config"
 	"github.com/GuitarWag/gcp-local/internal/httpresp"
 	"github.com/GuitarWag/gcp-local/internal/state"
+)
+
+// cronParser accepts the standard 5-field cron syntax plus robfig's "@every <dur>"
+// shorthand. We also normalise our legacy "every <dur>" prefix to "@every <dur>"
+// in parseSchedule so existing configs keep working.
+var cronParser = cron.NewParser(
+	cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor,
 )
 
 const nsJobs = "scheduler/jobs"
@@ -163,8 +172,8 @@ func (s *Service) startRunner(j jobResource) {
 	if existing, ok := s.jobs[j.Name]; ok {
 		existing.cancel()
 	}
-	d := parseSchedule(j.Schedule)
-	if d <= 0 {
+	sched, err := parseSchedule(j.Schedule)
+	if err != nil {
 		// invalid schedule: don't run
 		return
 	}
@@ -172,13 +181,18 @@ func (s *Service) startRunner(j jobResource) {
 	r := &runner{job: j, cancel: cancel}
 	s.jobs[j.Name] = r
 	go func() {
-		t := time.NewTicker(d)
-		defer t.Stop()
 		for {
+			next := sched.Next(time.Now())
+			delay := time.Until(next)
+			if delay < 0 {
+				delay = 0
+			}
+			timer := time.NewTimer(delay)
 			select {
 			case <-ctx.Done():
+				timer.Stop()
 				return
-			case <-t.C:
+			case <-timer.C:
 				s.fire(r.job)
 			}
 		}
@@ -219,18 +233,13 @@ func (s *Service) fire(j jobResource) {
 	}
 }
 
-// parseSchedule supports a minimal subset: "every Ns" / "every Nm" / "every Nh"
-// for fast tests, or "* * * * *" -> 1 minute. Real cron parser is out of scope.
-func parseSchedule(s string) time.Duration {
-	s = strings.TrimSpace(s)
-	if strings.HasPrefix(s, "every ") {
-		rest := strings.TrimPrefix(s, "every ")
-		if d, err := time.ParseDuration(rest); err == nil {
-			return d
-		}
+// parseSchedule accepts standard 5-field cron expressions ("0 9 * * 1-5"),
+// robfig's "@every <duration>" shorthand, and the legacy "every <duration>"
+// form used by older configs (rewritten to "@every <duration>" before parsing).
+func parseSchedule(spec string) (cron.Schedule, error) {
+	spec = strings.TrimSpace(spec)
+	if strings.HasPrefix(spec, "every ") {
+		spec = "@every " + strings.TrimPrefix(spec, "every ")
 	}
-	if s == "* * * * *" {
-		return time.Minute
-	}
-	return 0
+	return cronParser.Parse(spec)
 }
