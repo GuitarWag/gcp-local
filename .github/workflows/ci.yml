@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build + vet + fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - run: go build ./...
+      - run: go vet ./...
+      - name: gofmt
+        run: |
+          out=$(gofmt -l internal/ cmd/)
+          if [ -n "$out" ]; then
+            echo "Files need formatting:"
+            echo "$out"
+            exit 1
+          fi
+
+  go-tests:
+    name: Go integration tests
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+          cache-dependency-path: |
+            go.sum
+            tests/go/go.sum
+      - name: go test -race
+        working-directory: tests/go
+        run: go test -race -count=1 ./...
+
+  python-tests:
+    name: Python integration tests
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: tests/python/requirements.txt
+      - name: Install dependencies
+        working-directory: tests/python
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: pytest
+        working-directory: tests/python
+        run: python -m pytest -v
+
+  typescript-tests:
+    name: TypeScript integration tests
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+          cache-dependency-path: tests/typescript/pnpm-lock.yaml
+      - name: Install dependencies
+        working-directory: tests/typescript
+        run: pnpm install --frozen-lockfile
+      - name: vitest
+        working-directory: tests/typescript
+        run: pnpm test

@@ -21,9 +21,9 @@ tests/typescript/node_modules/
 tests/typescript/.vite/
 
 # Tool / IDE state — block every dotfolder by default at every level.
-# If you ever need to commit one (e.g. .github/), explicitly negate it
-# below with `!.github/`.
+# Explicit allow-list below for things we do want in the repo.
 .*/
+!.github/
 
 # Also ignore stray dotfiles produced by tooling.
 ruvector.db

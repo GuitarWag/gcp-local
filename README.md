@@ -1,5 +1,7 @@
 # gcp-local
 
+[![CI](https://github.com/GuitarWag/gcp-local/actions/workflows/ci.yml/badge.svg)](https://github.com/GuitarWag/gcp-local/actions/workflows/ci.yml)
+
 **A single binary that pretends to be Google Cloud.** No Docker, no Java, no
 GCP project, no internet. Point your existing SDK code at `localhost`, get on
 with your day.
