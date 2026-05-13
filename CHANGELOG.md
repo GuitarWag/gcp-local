@@ -10,6 +10,13 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ### Added
 
+- **Storage: XML API write + chunked resumable uploads.** `PUT /{bucket}/{object}`
+  now uploads via the XML path (used by the Python google-cloud-storage SDK
+  in some configurations). The resumable upload handler now parses
+  `Content-Range` headers and supports multi-chunk transfers, status-query
+  pings (`bytes */<total>`), 308 Resume Incomplete intermediate responses,
+  and the Node SDK's open-ended `bytes 0-*/*` single-chunk streaming form.
+  Closes #8.
 - **Release pipeline.** Tagging `v*` now triggers a GoReleaser workflow that
   builds binaries for macOS and Linux (amd64 + arm64), generates SHA-256
   checksums, and attaches everything to the GitHub Release. Closes #6.

@@ -249,7 +249,7 @@ services:
 
 | Service          | Status            | Notes                                              |
 |------------------|-------------------|----------------------------------------------------|
-| Cloud Storage    | working           | Real SDK compat via `STORAGE_EMULATOR_HOST`. JSON + XML APIs, multipart and resumable uploads. |
+| Cloud Storage    | working           | Real SDK compat via `STORAGE_EMULATOR_HOST`. JSON + XML APIs (GET/PUT/DELETE). Multipart and chunked resumable uploads with status query + 308 Resume Incomplete. |
 | Pub/Sub          | working           | REST + full gRPC incl `StreamingPull`. Ack deadlines, nack, modAck redelivery. |
 | Secret Manager   | working           | Full CRUD + versions + access. Cascade-delete versions. |
 | Cloud Tasks      | working           | Queue CRUD + HTTP dispatch to target URL.          |

@@ -11,6 +11,7 @@ import (
 	"hash/crc32"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -100,8 +101,9 @@ func (s *Service) handleDownloadRoot(w http.ResponseWriter, r *http.Request) {
 	s.handleDownload(w, r)
 }
 
-// HandleXML handles XML-style /{bucket}/{object} requests used by the GCS SDK for
-// raw object reads when STORAGE_EMULATOR_HOST is set.
+// HandleXML handles XML-style /{bucket}/{object} requests used by the GCS SDK
+// (Python google-cloud-storage in particular) when STORAGE_EMULATOR_HOST points
+// here. Supports GET (read), PUT (write), and DELETE.
 func (s *Service) HandleXML(w http.ResponseWriter, r *http.Request) bool {
 	path := strings.TrimPrefix(r.URL.Path, "/")
 	if path == "" {
@@ -114,15 +116,40 @@ func (s *Service) HandleXML(w http.ResponseWriter, r *http.Request) bool {
 	if _, err := s.store.Get(nsBuckets, bucket); err != nil {
 		return false
 	}
+	objName, err := url.PathUnescape(object)
+	if err != nil {
+		s.writeErr(w, http.StatusBadRequest, "invalid object name")
+		return true
+	}
 	switch r.Method {
 	case http.MethodGet:
-		s.downloadObject(w, r, bucket, object)
+		s.downloadObject(w, r, bucket, objName)
+		return true
+	case http.MethodPut:
+		s.xmlPutObject(w, r, bucket, objName)
 		return true
 	case http.MethodDelete:
-		s.deleteObject(w, r, bucket, object)
+		s.deleteObject(w, r, bucket, objName)
 		return true
 	}
 	return false
+}
+
+// xmlPutObject implements the XML PUT-object upload path. Body is the raw
+// object bytes; Content-Type, if provided, becomes the object's content type.
+func (s *Service) xmlPutObject(w http.ResponseWriter, r *http.Request, bucket, object string) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		s.writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	ct := r.Header.Get("Content-Type")
+	obj := s.storeObject(bucket, object, ct, body)
+	if obj.Etag != "" {
+		w.Header().Set("ETag", obj.Etag)
+	}
+	w.Header().Set("x-goog-generation", obj.Generation)
+	w.WriteHeader(http.StatusOK)
 }
 
 func (s *Service) ensureBucket(name string) error {
