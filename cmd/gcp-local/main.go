@@ -20,6 +20,13 @@ import (
 	"github.com/GuitarWag/gcp-local/internal/pidfile"
 )
 
+// Build-time identifiers, set via -ldflags by GoReleaser.
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 func main() {
 	if len(os.Args) < 2 {
 		usage()
@@ -46,6 +53,8 @@ func main() {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)
 		}
+	case "version", "-v", "--version":
+		fmt.Printf("gcp-local %s (%s, built %s)\n", version, commit, date)
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -64,6 +73,7 @@ Usage:
   gcp-local status
   gcp-local stop
   gcp-local reset [--service=NAME]
+  gcp-local version
 `)
 }
 

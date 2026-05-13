@@ -10,6 +10,11 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ### Added
 
+- **Release pipeline.** Tagging `v*` now triggers a GoReleaser workflow that
+  builds binaries for macOS and Linux (amd64 + arm64), generates SHA-256
+  checksums, and attaches everything to the GitHub Release. Closes #6.
+- **`gcp-local version`** subcommand prints the build version, commit hash,
+  and build date (populated via `-ldflags` at release time).
 - **Scheduler: standard cron syntax.** Jobs now accept full 5-field cron
   expressions (`0 9 * * 1-5`) and `@every <duration>` shorthand via
   `robfig/cron/v3`. The legacy `every <duration>` form is still accepted

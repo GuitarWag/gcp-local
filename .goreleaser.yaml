@@ -1,0 +1,74 @@
+# https://goreleaser.com
+version: 2
+
+project_name: gcp-local
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: gcp-local
+    main: ./cmd/gcp-local
+    binary: gcp-local
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+      - CHANGELOG.md
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "Merge pull request"
+      - "Merge branch"
+
+release:
+  github:
+    owner: GuitarWag
+    name: gcp-local
+  draft: false
+  prerelease: auto
+  name_template: "{{.ProjectName}} {{.Tag}}"
+  header: |
+    See [CHANGELOG.md](https://github.com/GuitarWag/gcp-local/blob/main/CHANGELOG.md) for the full notes.
+  footer: |
+    **Install**
+
+    ```bash
+    go install github.com/GuitarWag/gcp-local/cmd/gcp-local@{{.Tag}}
+    ```
+
+    Or grab a binary above (macOS/Linux × amd64/arm64) and drop it on your PATH.
