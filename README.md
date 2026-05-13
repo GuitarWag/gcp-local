@@ -1,6 +1,10 @@
 # gcp-local
 
 [![CI](https://github.com/GuitarWag/gcp-local/actions/workflows/ci.yml/badge.svg)](https://github.com/GuitarWag/gcp-local/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/GuitarWag/gcp-local.svg)](https://pkg.go.dev/github.com/GuitarWag/gcp-local)
+[![Go Report Card](https://goreportcard.com/badge/github.com/GuitarWag/gcp-local)](https://goreportcard.com/report/github.com/GuitarWag/gcp-local)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/GuitarWag/gcp-local)](https://github.com/GuitarWag/gcp-local/releases)
 
 **A single binary that pretends to be Google Cloud.** No Docker, no Java, no
 GCP project, no internet. Point your existing SDK code at `localhost`, get on
