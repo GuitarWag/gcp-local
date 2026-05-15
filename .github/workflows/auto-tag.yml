@@ -1,0 +1,62 @@
+name: Auto-tag on CHANGELOG bump
+
+on:
+  push:
+    branches: [main]
+    paths: [CHANGELOG.md]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Tag + publish if CHANGELOG has a new version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect version
+        id: ver
+        run: |
+          set -euo pipefail
+          version=$(grep -m1 -E '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md \
+            | sed -E 's/.*\[([0-9]+\.[0-9]+\.[0-9]+)\].*/\1/' || true)
+          if [ -z "${version:-}" ]; then
+            echo "No semver section in CHANGELOG.md, skipping."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          tag="v$version"
+          if git rev-parse --verify --quiet "refs/tags/$tag" >/dev/null; then
+            echo "Tag $tag already exists, nothing to do."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Will release $tag."
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-go@v5
+        if: steps.ver.outputs.release == 'true'
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Tag and push
+        if: steps.ver.outputs.release == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "${{ steps.ver.outputs.tag }}"
+          git push origin "${{ steps.ver.outputs.tag }}"
+
+      - uses: goreleaser/goreleaser-action@v6
+        if: steps.ver.outputs.release == 'true'
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
