@@ -1,0 +1,50 @@
+{{define "content"}}
+<div class="overview-strip">
+  <div class="card">
+    <div class="label">Services</div>
+    <div class="value accent">{{.EnabledCount}}<span class="dim" style="font-size: 18px; font-weight: 400;"> / {{.TotalCount}}</span></div>
+    <div class="sub">enabled / total</div>
+  </div>
+  <div class="card">
+    <div class="label">Version</div>
+    <div class="value">{{.Version}}</div>
+    <div class="sub">{{if .Commit}}{{.Commit}}{{else}}local build{{end}}</div>
+  </div>
+  <div class="card">
+    <div class="label">Endpoint</div>
+    <div class="value mono">{{.Endpoint}}</div>
+    <div class="sub">REST + gRPC over h2c</div>
+  </div>
+  <div class="card">
+    <div class="label">Project</div>
+    <div class="value mono">{{.Project}}</div>
+    <div class="sub">default project id</div>
+  </div>
+</div>
+
+<h3>Services <span class="count">{{.EnabledCount}} enabled</span></h3>
+<table class="compact">
+  <thead><tr><th style="width: 30%">Service</th><th style="width: 14%">Status</th><th>Endpoint</th></tr></thead>
+  <tbody>
+    {{range .Summary}}
+    <tr>
+      <td><a href="{{.Href}}">{{.Label}}</a></td>
+      <td>
+        {{if eq .Status "ready"}}<span class="pill ok">Ready</span>
+        {{else if eq .Status "starting"}}<span class="pill starting">Starting</span>
+        {{else if eq .Status "error"}}<span class="pill error">Error</span>
+        {{else if eq .Status "disabled"}}<span class="pill muted">Disabled</span>
+        {{else}}<span class="pill muted">{{.Status}}</span>
+        {{end}}
+      </td>
+      <td class="muted">{{.Endpoint}}</td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+
+<div class="hint-block">
+  Pick a service from the sidebar to drill into resources. Pages poll for fresh state every 1–3s.
+  Seed data with the standard SDKs or <code>curl</code> against the same emulator port.
+</div>
+{{end}}

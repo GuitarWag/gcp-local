@@ -74,7 +74,15 @@ The SDK reads the env vars, hits `localhost:4443`, and the emulator behaves
 exactly like the real services for the surface you actually use.
 
 Open `http://localhost:4443/dashboard` to see buckets, topics, secrets, and
-queues update live as your app writes to them.
+queues update live as your app writes to them. For a richer, per-service
+view — log tail, object preview, message peek, encrypt/decrypt forms — open
+`http://localhost:4443/console`.
+
+To poke at the console with realistic data instead of a blank slate,
+`./scripts/seed.sh` heavily seeds every emulated service in one shot
+(60 log entries, 5 buckets with mixed objects, 5 topics with 60 messages,
+10 secrets with versions, 3 queues with staggered tasks, 6 scheduler
+jobs, 3 keyrings with keys).
 
 ### 2. CI integration tests
 

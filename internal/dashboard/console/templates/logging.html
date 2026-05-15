@@ -1,0 +1,8 @@
+{{define "content"}}
+<div class="tail-controls">
+  <input id="filter" type="text" placeholder="filter, e.g. severity &gt;= WARNING AND logName = projects/p/logs/x" autocomplete="off">
+  <button id="pause" class="secondary">Pause</button>
+  <span class="status" id="status"></span>
+</div>
+<div id="log-tail"></div>
+{{end}}

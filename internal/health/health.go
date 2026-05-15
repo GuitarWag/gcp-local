@@ -29,6 +29,15 @@ func (r *Registry) Set(name string, s Status) {
 	r.services[name] = s
 }
 
+// Lookup returns the current status for a registered service. The second
+// return is false if the service was never registered.
+func (r *Registry) Lookup(name string) (Status, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	s, ok := r.services[name]
+	return s, ok
+}
+
 func (r *Registry) snapshot() (map[string]Status, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

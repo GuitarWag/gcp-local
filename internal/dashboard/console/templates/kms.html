@@ -1,0 +1,23 @@
+{{define "content"}}
+<div class="split">
+  <div class="col">
+    <h3>Key Rings</h3>
+    <ul id="rings" class="kv"></ul>
+    <h3>Crypto Keys</h3>
+    <ul id="keys" class="kv"></ul>
+  </div>
+  <div class="col">
+    <h3 id="cipher-title">Encrypt / Decrypt</h3>
+    <form id="enc-form">
+      <label>plaintext<textarea name="plaintext" rows="3" placeholder="text to encrypt"></textarea></label>
+      <button type="submit">Encrypt</button>
+    </form>
+    <pre class="payload" id="ciphertext-out">ciphertext appears here</pre>
+    <form id="dec-form">
+      <label>ciphertext (base64)<textarea name="ciphertext" rows="3" placeholder="base64 ciphertext"></textarea></label>
+      <button type="submit">Decrypt</button>
+    </form>
+    <pre class="payload" id="plaintext-out">plaintext appears here</pre>
+  </div>
+</div>
+{{end}}

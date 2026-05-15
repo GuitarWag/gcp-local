@@ -1,0 +1,15 @@
+{{define "content"}}
+<div class="split">
+  <div class="col">
+    <h3>Queues</h3>
+    <ul id="queues" class="kv"></ul>
+  </div>
+  <div class="col">
+    <h3 id="tasks-title">Tasks</h3>
+    <table class="compact">
+      <thead><tr><th>ID</th><th>Method</th><th>URL</th><th>Schedule</th></tr></thead>
+      <tbody id="tasks"></tbody>
+    </table>
+  </div>
+</div>
+{{end}}

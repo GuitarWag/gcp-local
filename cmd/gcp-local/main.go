@@ -134,7 +134,7 @@ func runStart(args []string) error {
 		return fmt.Errorf("write creds: %w", err)
 	}
 
-	gw, err := gateway.New(cfg)
+	gw, err := gateway.New(cfg, gateway.BuildInfo{Version: version, Commit: commit})
 	if err != nil {
 		return fmt.Errorf("init gateway: %w", err)
 	}

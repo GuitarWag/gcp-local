@@ -139,6 +139,14 @@ linters:
         linters:
           - gosec
         text: "G115"
+      # Console PageScript values are package-level JS constants we author,
+      # never user input, so template.JS is safe by construction. The
+      # "secretsPageJS" constant trips G101 only because its name contains
+      # "secret".
+      - path: internal/dashboard/console/
+        linters:
+          - gosec
+        text: "G203|G101"
 
 formatters:
   enable:
