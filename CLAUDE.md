@@ -84,6 +84,49 @@ If any step fails, fix it and re-run the whole gate. Don't push partial.
 Don't trust CI to be the first signal — by the time CI fails, you've
 already shipped the breakage to `main`.
 
+## CHANGELOG and releases (required on every PR)
+
+Every PR must update `CHANGELOG.md` **and** cut a new release. No
+exceptions — docs, refactors, tiny fixes included. The CHANGELOG drives
+the release notes; the release ships the binaries users actually
+download.
+
+### 1. Update `CHANGELOG.md`
+
+Append an entry under `## [Unreleased]` in the same PR. Use Keep a
+Changelog sections (`### Added` / `### Changed` / `### Fixed` /
+`### Removed` / `### Deprecated` / `### Security`). Mirror the existing
+style: bold lead, prose paragraph, `Closes #N` at the end. Be specific
+about the user-visible behaviour change, not the internal refactor.
+
+### 2. Cut the release in the same PR
+
+Graduate `[Unreleased]` to a new versioned heading before merge:
+
+1. Pick the next version using semver (pre-1.0: minor bump for new
+   user-visible features or behaviour changes, patch bump for fixes and
+   docs).
+2. In `CHANGELOG.md`: rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`,
+   re-add an empty `## [Unreleased]` above it, and update the link
+   footnotes at the bottom (new `[X.Y.Z]:` line + bump `[Unreleased]:` to
+   `compare/vX.Y.Z...HEAD`).
+3. After the PR merges to `main`, tag and push:
+
+   ```bash
+   git checkout main && git pull
+   git tag vX.Y.Z
+   git push origin vX.Y.Z
+   ```
+
+   The tag push triggers `.github/workflows/release.yml` → goreleaser
+   builds binaries for darwin/linux × amd64/arm64 and creates the GitHub
+   Release.
+
+The agent opening the PR is responsible for the CHANGELOG entry and the
+version bump in the same diff. Tag push happens post-merge by whoever
+merges. If you're unsure about the version bump, propose one in the PR
+description and let the maintainer correct it before merge.
+
 ## Conventions
 
 - Real GCP SDKs are the compatibility target. When in doubt, run the real

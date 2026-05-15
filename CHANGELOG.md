@@ -8,6 +8,20 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-15
+
+### Added
+
+- **`gcloud` CLI setup against the emulator.** New `gcp-local gcloud-setup`
+  and `gcp-local gcloud-teardown` subcommands print shell snippets
+  (mirroring `gcp-local env`) that create a dedicated `gcp-local` gcloud
+  configuration, disable credentials, and wire
+  `api_endpoint_overrides/<service>` for every service the emulator
+  supports — then switch back to the user's default configuration. New
+  `docs/gcloud.md` walks through the eval-based workflow, manual fallback,
+  and per-service example commands. README gains a short "Using with
+  `gcloud`" section. Closes #16.
+
 ## [0.2.0] - 2026-05-14
 
 Nine closed issues, +28 integration tests, real pre-built binaries on the
@@ -219,6 +233,7 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.3.0
 [0.2.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.2.0
 [0.1.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.1.0
