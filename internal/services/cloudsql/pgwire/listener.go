@@ -93,7 +93,7 @@ func (l *Listener) acceptLoop() {
 		l.wg.Add(1)
 		go func(c net.Conn) {
 			defer l.wg.Done()
-			defer c.Close()
+			defer func() { _ = c.Close() }()
 			s := newSession(c, l.db, l.database)
 			s.serve(l.ctx)
 		}(conn)

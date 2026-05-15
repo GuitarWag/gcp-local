@@ -130,7 +130,7 @@ func (s *Service) deleteObject(w http.ResponseWriter, _ *http.Request, bucket, o
 
 func (s *Service) handleUpload(w http.ResponseWriter, r *http.Request) {
 	rest := strings.TrimPrefix(r.URL.Path, "/upload/storage/v1/b/")
-	bucket, suffix := splitFirst(rest, "/")
+	bucket, suffix := splitFirst(rest)
 	if !strings.HasPrefix(suffix, "o") {
 		s.writeErr(w, http.StatusNotFound, "not found")
 		return
@@ -444,7 +444,7 @@ func (s *Service) uploadMultipart(w http.ResponseWriter, r *http.Request, bucket
 
 	for {
 		part, err := mr.NextPart()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
@@ -507,7 +507,7 @@ func (s *Service) storeObject(bucket, name, ct string, body []byte) objectResour
 func (s *Service) handleDownload(w http.ResponseWriter, r *http.Request) {
 	// /download/storage/v1/b/{bucket}/o/{object}?alt=media
 	rest := strings.TrimPrefix(r.URL.Path, "/download/storage/v1/b/")
-	bucket, suffix := splitFirst(rest, "/")
+	bucket, suffix := splitFirst(rest)
 	if !strings.HasPrefix(suffix, "o/") {
 		s.writeErr(w, http.StatusNotFound, "not found")
 		return

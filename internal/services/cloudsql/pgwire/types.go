@@ -38,6 +38,7 @@ func sqliteTypeToOID(declType string) uint32 {
 		return oidInt4
 	case strings.Contains(t, "BOOL"):
 		return oidBool
+	//nolint:misspell // "DOUB" is a prefix match for SQL "DOUBLE", not a misspelling.
 	case strings.Contains(t, "REAL"), strings.Contains(t, "FLOA"), strings.Contains(t, "DOUB"):
 		return oidFloat8
 	case strings.Contains(t, "BLOB"):

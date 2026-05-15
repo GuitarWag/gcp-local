@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	_ "modernc.org/sqlite"
+	_ "modernc.org/sqlite" // sqlite driver registered as "sqlite" with database/sql
 
 	"github.com/GuitarWag/gcp-local/internal/config"
 	"github.com/GuitarWag/gcp-local/internal/httpresp"
@@ -403,7 +403,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		s.writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	cols, err := rows.Columns()
 	if err != nil {
 		s.writeErr(w, http.StatusInternalServerError, err.Error())

@@ -251,9 +251,9 @@ func (f *firestoreServer) Commit(_ context.Context, req *pb.CommitRequest) (*pb.
 	}, nil
 }
 
-func (f *firestoreServer) BatchWrite(_ context.Context, req *pb.BatchWriteRequest) (*pb.BatchWriteResponse, error) {
+func (f *firestoreServer) BatchWrite(ctx context.Context, req *pb.BatchWriteRequest) (*pb.BatchWriteResponse, error) {
 	commit := &pb.CommitRequest{Database: req.GetDatabase(), Writes: req.GetWrites()}
-	resp, err := f.Commit(context.Background(), commit)
+	resp, err := f.Commit(ctx, commit)
 	if err != nil {
 		return nil, err
 	}

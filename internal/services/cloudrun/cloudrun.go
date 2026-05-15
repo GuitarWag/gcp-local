@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/GuitarWag/gcp-local/internal/config"
@@ -47,7 +46,6 @@ type Service struct {
 	kind    Kind
 	ns      string
 	client  *http.Client
-	mu      sync.Mutex
 }
 
 func NewCloudRun(store state.Store, cfg *config.Config) (*Service, error) {

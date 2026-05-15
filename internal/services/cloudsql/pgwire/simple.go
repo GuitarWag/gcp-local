@@ -50,7 +50,7 @@ func (s *session) execSelect(ctx context.Context, conn *sql.Conn, sqlStr string,
 		s.sendErr("42000", err.Error())
 		return false
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	cols, err := rows.ColumnTypes()
 	if err != nil {

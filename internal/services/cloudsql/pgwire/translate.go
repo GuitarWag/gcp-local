@@ -35,23 +35,11 @@ func translate(in string) (string, []int) {
 	return out, order
 }
 
-// dollarToQuestion rewrites Postgres `$N` placeholders to sqlite `?N`.
-// Sqlite supports numbered placeholders, but modernc.org/sqlite's database/sql
-// driver only counts positional `?` slots when comparing to args, so we emit
-// a bare `?` for every $N occurrence — meaning each reuse expands the args
-// slice. The walk respects single-quoted strings, double-quoted identifiers
-// and dollar-quoted blocks ($tag$...$tag$).
-//
-// rewriteSQL returns the translated SQL plus the mapping from output `?` slot
-// → original 1-based pg parameter index, so the caller can rebuild the
-// argument list when a parameter is referenced more than once.
-func dollarToQuestion(in string) string {
-	out, _ := rewriteSQL(in)
-	return out
-}
-
-// rewriteSQL is the variant of dollarToQuestion that also reports the
-// parameter index for each `?` it emitted.
+// rewriteSQL rewrites Postgres `$N` placeholders to sqlite `?` slots, and
+// returns the mapping from each output `?` to its 1-based pg parameter index
+// so the caller can rebuild the argument list when a parameter is referenced
+// more than once. The walk respects single-quoted strings, double-quoted
+// identifiers and dollar-quoted blocks ($tag$...$tag$).
 func rewriteSQL(in string) (string, []int) {
 	var b strings.Builder
 	b.Grow(len(in))

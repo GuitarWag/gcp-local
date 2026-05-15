@@ -63,18 +63,22 @@ session.
 
 Tests are integration-only (no unit tests). Race detector should stay clean.
 
-### Pre-push gate (run all five, no shortcuts)
+### Pre-push gate (run all six, no shortcuts)
 
 Run the full gate locally before every `git push`. CI catches things, but
 catching them locally is the whole point of having a three-language harness.
 
 ```bash
 go vet ./...
-gofmt -l internal/ cmd/   # must print nothing
+gofmt -l internal/ cmd/                # must print nothing
+golangci-lint run ./...                # config in .golangci.yml
 (cd tests/go && go test -race -count=1 ./...)
 (cd tests/python && .venv/bin/python -m pytest -q)
 (cd tests/typescript && pnpm test)
 ```
+
+Install golangci-lint v2 once:
+`go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest`
 
 If any step fails, fix it and re-run the whole gate. Don't push partial.
 Don't trust CI to be the first signal — by the time CI fails, you've

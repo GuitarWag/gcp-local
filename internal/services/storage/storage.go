@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/GuitarWag/gcp-local/internal/config"
@@ -37,9 +36,6 @@ const (
 type Service struct {
 	store   state.Store
 	project string
-
-	mu        sync.RWMutex
-	generator uint64
 }
 
 func New(store state.Store, cfg *config.Config) (*Service, error) {
@@ -109,7 +105,7 @@ func (s *Service) HandleXML(w http.ResponseWriter, r *http.Request) bool {
 	if path == "" {
 		return false
 	}
-	bucket, object := splitFirst(path, "/")
+	bucket, object := splitFirst(path)
 	if object == "" {
 		return false
 	}
@@ -267,7 +263,7 @@ func (s *Service) handleBucketPath(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Split bucket from rest
-	bucket, suffix := splitFirst(rest, "/")
+	bucket, suffix := splitFirst(rest)
 	if suffix == "" {
 		// /storage/v1/b/{bucket}
 		s.bucketOp(w, r, bucket)
@@ -336,12 +332,12 @@ func objectDataNamespace(bucket string) string {
 	return "storage/data/" + bucket
 }
 
-func splitFirst(s, sep string) (string, string) {
-	i := strings.Index(s, sep)
+func splitFirst(s string) (string, string) {
+	i := strings.IndexByte(s, '/')
 	if i < 0 {
 		return s, ""
 	}
-	return s[:i], s[i+len(sep):]
+	return s[:i], s[i+1:]
 }
 
 func computeMD5(data []byte) string {
@@ -352,8 +348,4 @@ func computeMD5(data []byte) string {
 func hexEtag(data []byte) string {
 	sum := md5.Sum(data)
 	return hex.EncodeToString(sum[:])
-}
-
-func readAll(r io.Reader) ([]byte, error) {
-	return io.ReadAll(r)
 }
