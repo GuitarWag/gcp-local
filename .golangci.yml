@@ -35,12 +35,10 @@ linters:
         - fmt.Fprintf
         - fmt.Fprint
         - (*encoding/json.Encoder).Encode
-        - (io.Closer).Close
     gosec:
       excludes:
         - G304 # File path provided as taint input — paths come from API requests by design.
         - G404 # Insecure random — emulator does not need crypto-grade randomness.
-        - G115 # Integer overflow on conversion — handled case by case.
     revive:
       rules:
         - name: blank-imports
@@ -129,6 +127,18 @@ linters:
         linters:
           - gosec
         text: "G705"
+      # Postgres wire protocol encodes/decodes fixed-width integers as bytes;
+      # the conversions are bounded by the wire format itself.
+      - path: internal/services/cloudsql/pgwire/types\.go$
+        linters:
+          - gosec
+        text: "G115"
+      # Pub/Sub gRPC API uses int32 for AckDeadlineSeconds, but the stored
+      # value is validated to fit (max 600s).
+      - path: internal/services/pubsub/grpc\.go$
+        linters:
+          - gosec
+        text: "G115"
 
 formatters:
   enable:
