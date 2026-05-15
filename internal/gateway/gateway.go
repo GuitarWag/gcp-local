@@ -390,6 +390,9 @@ func (g *Gateway) Run(ctx context.Context) error {
 		if g.mem != nil {
 			g.mem.Stop(shutdownCtx)
 		}
+		if g.csql != nil {
+			g.csql.Stop(shutdownCtx)
+		}
 		if g.bq != nil {
 			_ = g.bq.Close()
 		}
