@@ -46,6 +46,10 @@ func main() {
 		}
 	case "env":
 		runEnv(args)
+	case "gcloud-setup":
+		runGcloudSetup(args)
+	case "gcloud-teardown":
+		runGcloudTeardown(args)
 	case "status":
 		os.Exit(runStatus())
 	case "stop":
@@ -77,6 +81,8 @@ func usage() {
 Usage:
   gcp-local start [--port=N] [--config=FILE] [--no-daemon] [--tls]
   gcp-local env
+  gcp-local gcloud-setup [--port=N] [--project=ID] [--config=NAME] [--tls]
+  gcp-local gcloud-teardown [--config=NAME] [--delete]
   gcp-local status
   gcp-local stop
   gcp-local reset [--service=NAME]
@@ -234,6 +240,71 @@ func runEnv(args []string) {
 	}
 	for _, e := range exports {
 		fmt.Println(e)
+	}
+}
+
+// gcloudServices lists the api_endpoint_overrides/* keys that gcloud honours
+// for the services gcp-local emulates. Keys match `gcloud config set
+// api_endpoint_overrides/<key>` namespacing.
+var gcloudServices = []string{
+	"storage",
+	"pubsub",
+	"secretmanager",
+	"cloudtasks",
+	"cloudscheduler",
+	"cloudkms",
+	"logging",
+	"monitoring",
+	"bigquery",
+	"firestore",
+	"run",
+	"cloudfunctions",
+	"sqladmin",
+}
+
+func runGcloudSetup(args []string) {
+	fs := flag.NewFlagSet("gcloud-setup", flag.ExitOnError)
+	port := fs.Int("port", 0, "port the emulator is on (defaults to pidfile)")
+	project := fs.String("project", "local-project", "project id")
+	cfgName := fs.String("config", "gcp-local", "gcloud configuration name")
+	useTLS := fs.Bool("tls", false, "use https:// endpoints (when emulator runs with --tls)")
+	_ = fs.Parse(args)
+
+	resolved := *port
+	if resolved == 0 {
+		if info, err := pidfile.Read(); err == nil {
+			resolved = info.Port
+		}
+	}
+	if resolved == 0 {
+		resolved = 4443
+	}
+
+	scheme := "http"
+	if *useTLS {
+		scheme = "https"
+	}
+	endpoint := fmt.Sprintf("%s://localhost:%d/", scheme, resolved)
+
+	fmt.Printf("gcloud config configurations create --no-activate %s 2>/dev/null || true\n", *cfgName)
+	fmt.Printf("gcloud config configurations activate %s\n", *cfgName)
+	fmt.Println("gcloud config set auth/disable_credentials true")
+	fmt.Println("gcloud config set account local-dev")
+	fmt.Printf("gcloud config set project %s\n", *project)
+	for _, svc := range gcloudServices {
+		fmt.Printf("gcloud config set api_endpoint_overrides/%s %s\n", svc, endpoint)
+	}
+}
+
+func runGcloudTeardown(args []string) {
+	fs := flag.NewFlagSet("gcloud-teardown", flag.ExitOnError)
+	cfgName := fs.String("config", "gcp-local", "gcloud configuration name")
+	del := fs.Bool("delete", false, "delete the gcp-local configuration instead of just deactivating it")
+	_ = fs.Parse(args)
+
+	fmt.Println("gcloud config configurations activate default")
+	if *del {
+		fmt.Printf("gcloud config configurations delete %s --quiet\n", *cfgName)
 	}
 }
 
