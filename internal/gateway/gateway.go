@@ -16,6 +16,7 @@ import (
 
 	"github.com/GuitarWag/gcp-local/internal/config"
 	"github.com/GuitarWag/gcp-local/internal/dashboard"
+	"github.com/GuitarWag/gcp-local/internal/dashboard/console"
 	"github.com/GuitarWag/gcp-local/internal/health"
 	"github.com/GuitarWag/gcp-local/internal/services/bigquery"
 	"github.com/GuitarWag/gcp-local/internal/services/bigtable"
@@ -35,11 +36,20 @@ import (
 	"github.com/GuitarWag/gcp-local/internal/state"
 )
 
+// BuildInfo carries build-time identifiers (version, commit) injected by
+// the CLI via -ldflags. It's surfaced in the /console UI footer; an
+// empty struct is safe.
+type BuildInfo struct {
+	Version string
+	Commit  string
+}
+
 type Gateway struct {
 	cfg     *config.Config
 	store   state.Store
 	mux     *http.ServeMux
 	health  *health.Registry
+	build   BuildInfo
 	storage *storage.Service
 	pubsub  *pubsub.Service
 	sm      *secretmanager.Service
@@ -61,7 +71,7 @@ type Gateway struct {
 
 type v1Handler func(http.ResponseWriter, *http.Request, []string) bool
 
-func New(cfg *config.Config) (*Gateway, error) {
+func New(cfg *config.Config, build BuildInfo) (*Gateway, error) {
 	store, err := state.Open(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("open state: %w", err)
@@ -72,6 +82,7 @@ func New(cfg *config.Config) (*Gateway, error) {
 		store:  store,
 		mux:    http.NewServeMux(),
 		health: health.New(),
+		build:  build,
 		grpc:   grpc.NewServer(),
 	}
 
@@ -222,6 +233,75 @@ func New(cfg *config.Config) (*Gateway, error) {
 		}
 		g.funcs = svc
 		g.health.Set(svc.Name(), health.StatusReady)
+	}
+
+	if cfg.Dashboard {
+		copts := console.Options{
+			Version: build.Version,
+			Commit:  build.Commit,
+			Project: cfg.Project,
+			Health:  g.health,
+		}
+		// Wire each per-service console adapter only when the underlying
+		// service is constructed. Each adapter is a small interface in
+		// the console package; the service implements just what /console
+		// renders, leaving the full REST/gRPC surface untouched. The
+		// remaining services (storage, pubsub, firestore, secrets,
+		// tasks, scheduler, kms) get wired here as their console
+		// adapters land.
+		if g.logging != nil {
+			copts.Logging = g.logging
+		}
+		if g.storage != nil {
+			copts.Storage = g.storage
+		}
+		if g.pubsub != nil {
+			copts.PubSub = g.pubsub
+		}
+		if g.fs != nil {
+			copts.Firestore = g.fs
+		}
+		if g.sm != nil {
+			copts.Secrets = g.sm
+		}
+		if g.tasks != nil {
+			copts.Tasks = g.tasks
+		}
+		if g.sched != nil {
+			copts.Scheduler = g.sched
+		}
+		if g.kms != nil {
+			copts.KMS = g.kms
+		}
+		if g.mon != nil {
+			copts.Monitoring = g.mon
+		}
+		if g.bq != nil {
+			copts.BigQuery = g.bq
+		}
+		if g.csql != nil {
+			copts.CloudSQL = g.csql
+		}
+		if g.run != nil {
+			copts.CloudRun = g.run
+		}
+		if g.funcs != nil {
+			copts.Functions = g.funcs
+		}
+		if g.mem != nil {
+			copts.Memorystore = g.mem
+		}
+		if g.bt != nil {
+			copts.Bigtable = g.bt
+		}
+		if g.sp != nil {
+			copts.Spanner = g.sp
+		}
+		cs, err := console.New(store, copts)
+		if err != nil {
+			return nil, fmt.Errorf("init console: %w", err)
+		}
+		cs.Register(g.mux)
 	}
 
 	return g, nil

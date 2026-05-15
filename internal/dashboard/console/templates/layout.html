@@ -1,0 +1,70 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} – gcp-local</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0">
+<link rel="stylesheet" href="/console/static/app.css">
+<meta name="theme-color" content="#ffffff">
+<style>
+  .material-symbols-outlined {
+    font-family: 'Material Symbols Outlined';
+    font-weight: 400;
+    font-style: normal;
+    font-size: 20px;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-block;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    -webkit-font-feature-settings: 'liga';
+    font-feature-settings: 'liga';
+    -webkit-font-smoothing: antialiased;
+  }
+</style>
+</head>
+<body>
+<main class="layout">
+  <header class="topbar">
+    <h1>
+      <span class="mark"></span>
+      gcp-local<span class="slash">·</span><span class="sub">{{.Title}}</span>
+    </h1>
+    <div class="meta">
+      <span><b>v</b>{{.Version}}</span>
+      {{if .Commit}}<span><b>commit</b>{{.Commit}}</span>{{end}}
+      <span class="pill ok">running</span>
+    </div>
+  </header>
+  <nav class="sidebar">
+    {{range .Nav}}
+    <a href="{{.Href}}"{{if .Active}} class="active"{{end}}><span class="glyph material-symbols-outlined">{{.Icon}}</span>{{.Label}}</a>
+    {{end}}
+  </nav>
+  <section class="content">
+    <div class="page-head">
+      <h2>{{.Title}}</h2>
+      {{if .Hint}}<span class="hint">{{.Hint}}</span>{{end}}
+    </div>
+    {{template "content" .}}
+  </section>
+  <footer class="bottom">
+    <span class="status">emulator online</span>
+    <span class="sep">·</span>
+    <a href="/dashboard">classic dashboard</a>
+    <span class="sep">·</span>
+    <a href="/healthz">/healthz</a>
+    <span class="sep">·</span>
+    <a href="https://github.com/GuitarWag/gcp-local" target="_blank" rel="noopener">source</a>
+  </footer>
+</main>
+<script src="/console/static/app.js"></script>
+{{if .PageScript}}<script>{{.PageScript}}</script>{{end}}
+</body>
+</html>
+{{end}}

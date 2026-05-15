@@ -1,0 +1,22 @@
+{{define "content"}}
+<div class="split">
+  <div class="col">
+    <h3>Buckets</h3>
+    <ul id="buckets" class="kv"></ul>
+    <h3>Objects</h3>
+    <ul id="objects" class="kv"></ul>
+    <h3>Upload</h3>
+    <form id="upload">
+      <input type="text" name="object" placeholder="object name (e.g. notes/foo.txt)" required>
+      <textarea name="body" rows="4" placeholder="object body"></textarea>
+      <button type="submit">Upload to selected bucket</button>
+    </form>
+    <div id="upload-status" class="status"></div>
+  </div>
+  <div class="col">
+    <h3 id="preview-title">Preview</h3>
+    <div id="preview-meta" class="kv"></div>
+    <pre class="payload" id="preview-body">Select an object to preview.</pre>
+  </div>
+</div>
+{{end}}

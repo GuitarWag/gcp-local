@@ -1,0 +1,10 @@
+{{define "content"}}
+<h3>Instances</h3>
+<table class="compact">
+  <thead><tr><th>Name</th><th>Engine</th><th>Port</th><th>Database</th><th>State</th></tr></thead>
+  <tbody id="instances"></tbody>
+</table>
+<div class="hint-block" style="margin-top: 16px;">
+  Connect with <code>psql "host=localhost port=&lt;port&gt; user=postgres dbname=&lt;db&gt;"</code> or any standard Postgres client. The wire listener is real pgproto3 backed by SQLite.
+</div>
+{{end}}

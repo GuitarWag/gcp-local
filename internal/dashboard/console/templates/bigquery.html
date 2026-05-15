@@ -1,0 +1,23 @@
+{{define "content"}}
+<div class="split">
+  <div class="col">
+    <h3>Datasets</h3>
+    <ul id="datasets" class="kv"></ul>
+    <h3>Tables</h3>
+    <table class="compact">
+      <thead><tr><th>Table</th><th>Fields</th><th>Created</th></tr></thead>
+      <tbody id="tables"></tbody>
+    </table>
+  </div>
+  <div class="col">
+    <h3>Query</h3>
+    <form id="qform" onsubmit="event.preventDefault();">
+      <label>SQL (SQLite dialect under the hood)
+        <textarea id="query" rows="4" placeholder="SELECT 1+1 AS two"></textarea>
+      </label>
+      <button id="run" type="button">Run query</button>
+    </form>
+    <div id="result"></div>
+  </div>
+</div>
+{{end}}

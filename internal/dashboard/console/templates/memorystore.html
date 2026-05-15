@@ -1,0 +1,24 @@
+{{define "content"}}
+<div class="overview-strip">
+  <div class="card">
+    <div class="label">Host</div>
+    <div class="value mono"><span id="host">-</span></div>
+    <div class="sub">listener bind</div>
+  </div>
+  <div class="card">
+    <div class="label">Port</div>
+    <div class="value mono"><span id="port">-</span></div>
+    <div class="sub">Redis protocol</div>
+  </div>
+  <div class="card">
+    <div class="label">Keys</div>
+    <div class="value accent"><span id="keycount">0</span></div>
+    <div class="sub">total in DB 0</div>
+  </div>
+</div>
+<h3>Keys (first 50)</h3>
+<ul id="keys" class="kv"></ul>
+<div class="hint-block" style="margin-top: 16px;">
+  Connect with <code>redis-cli -h 127.0.0.1 -p &lt;port&gt;</code> or any standard Redis client. The backend is <code>miniredis</code>, which implements the real wire protocol.
+</div>
+{{end}}

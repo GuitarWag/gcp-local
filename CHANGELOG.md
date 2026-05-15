@@ -8,6 +8,115 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-15
+
+### Added
+
+- **`scripts/seed.sh`: one-shot heavy seed for every emulated service.**
+  60 log entries spread across 5 logs and 10 severities, 5 buckets with
+  15 mixed-content objects, 5 Pub/Sub topics with 9 subscriptions and
+  60 messages, 10 secrets with 1–3 versions each, 3 task queues with 6
+  staggered tasks, 6 scheduler jobs (cron + `@every`), 3 KMS keyrings
+  with 6 keys, 4 Cloud Monitoring time series with 5 points each, 2
+  BigQuery datasets with 4 tables and 10 rows, 3 Cloud SQL Postgres
+  instances on staggered ports, 4 Cloud Run services, 4 Cloud Functions,
+  and ~69 Firestore documents across 5 collections plus a subcollection
+  (the Firestore portion delegates to `scripts/seed_firestore/main.go`,
+  a small Go program using the real Firestore client against the
+  emulator's gRPC surface). Useful for clicking through `/console`
+  without staring at empty lists. Bash 3.2 compatible (no associative
+  arrays), works on stock macOS. The script is also exercised in CI:
+  `TestSeedScriptDrivesAllConsoleEndpoints` runs it against a fresh
+  emulator and asserts every `/console/api/*` endpoint returns the
+  expected shape — drift detection so adding a new console page or
+  renaming a `ConsoleX` adapter fails CI unless `seed.sh` is updated
+  to match.
+- **Console pages for the remaining 8 emulated services.** Cloud
+  Monitoring (time-series table with metric type / resource / point
+  count / last end-time), BigQuery (datasets + tables + an ad-hoc
+  query box that runs against the SQLite backend), Cloud SQL
+  (instances with engine / port / database / state), Cloud Run +
+  Cloud Functions (resource list with backend URLs), Memorystore
+  (host / port / live key count from miniredis), and stub status
+  cards for Bigtable + Spanner explaining what's implemented vs.
+  what returns `UNIMPLEMENTED`. All 16 emulated services are now on
+  the sidebar; the overview table reflects health-registry state per
+  service.
+- **Console UI at `/console`.** A local clone of the Google Cloud
+  console, scoped to what's useful while debugging. Eight per-service
+  pages reached from a sidebar: Cloud Logging (live tail with severity
+  / logName / timestamp filter, pause-on-hover), Cloud Storage (bucket
+  → object → text-or-hex preview + XML PUT upload form), Pub/Sub (topic
+  → subscription → peek messages without draining + publish test
+  message), Firestore (collection → document → JSON field view), Secret
+  Manager (secret → versions → reveal-on-click payload), Cloud Tasks
+  (queue → tasks with scheduleTime + method + URL), Cloud Scheduler
+  (jobs with next-fire computed from the cron expression), Cloud KMS
+  (keyring → key → encrypt/decrypt round-trip form). Server-side HTML
+  templates, vanilla `fetch` polling (1s for log tail, 2-3s elsewhere).
+  Hand-rolled CSS with a terminal-brutalist aesthetic: IBM Plex Mono
+  throughout, amber accent on near-black, sharp corners, ASCII section
+  markers, status pills with colour per state, subtle scan-line and
+  grid overlays. All static assets are bundled into the binary via
+  `go:embed`; the only network call is the optional Google Fonts
+  request from the browser, with a monospace system fallback if
+  offline. The legacy flat-list dashboard at `/dashboard` is unchanged.
+  Closes #17.
+- **CloudSQL: real Postgres wire protocol backed by SQLite.** Each
+  configured instance now spins up a TCP listener that speaks pgproto3
+  (jackc/pgproto3) against an in-process pure-Go SQLite engine
+  (modernc.org/sqlite), so `pgx`, `psycopg2`, and `node-postgres` connect
+  and run real round-trips against the emulator. Simple and Extended query
+  protocols are both implemented (Parse/Bind/Describe/Execute/Sync); `$N`
+  placeholders translate to SQLite `?` with parameter reuse, a small
+  dialect shim rewrites `SERIAL`/`BIGSERIAL` → `INTEGER PK AUTOINCREMENT`,
+  `BYTEA` → `BLOB`, and strips `::type` casts; row OIDs on
+  `RowDescription` are inferred from SQLite `DECLTYPE`. Per-instance YAML
+  config (`engine`, `port`, `database`, `seed`) plus a top-level
+  `base_port`; admin API responses carry the assigned `host` and `port`.
+  Default engine is `sqlite`; `postgres` (pgembedded) is rejected at
+  startup as a follow-up. Gateway shutdown closes listeners and SQLite
+  handles. Integration tests cover CREATE / INSERT / SELECT / UPDATE /
+  DELETE round-trips in Go, Python, and TypeScript. Closes #4.
+- **golangci-lint v2 config and pre-push integration.** New
+  `.golangci.yml` enables a curated linter set (bodyclose, copyloopvar,
+  errcheck, errorlint, gocheckcompilerdirectives, gosec, govet,
+  ineffassign, misspell, nilerr, nolintlint, revive, staticcheck,
+  unconvert, unparam, unused, usestdlibvars + gofmt/goimports), with
+  per-path suppressions documented inline for cases that are emulator
+  behaviour by design (md5 as the GCS ETag hash, proxy pass-through in
+  Cloud Run `invoke`, fake service-account JSON, local-config paths in
+  daemon re-exec and TLS key writes). CLAUDE.md pre-push gate now runs
+  `golangci-lint run ./...` alongside `go vet` and `gofmt`. Closes #19.
+
+### Changed
+
+- **Best-practice sweep across services.** Pubsub `Service` receivers
+  unified to `s` across all 34 methods (staticcheck ST1016); shadowed
+  `max` builtin removed from `inferParamOIDs` and `PullMessages`; dead
+  state and unused mutex fields stripped from `kms`, `logging`, `storage`,
+  `tasks`, `cloudrun`; dead helpers (`storage.readAll`,
+  `pgwire.dollarToQuestion`) and unused parameters/separators removed;
+  blank SQLite imports in `bigquery` and `cloudsql` now carry a
+  justifying comment. No behaviour change.
+
+### Fixed
+
+- **Firestore `BatchWrite` dropped caller context.** `BatchWrite` was
+  passing `context.Background()` to the internal `Commit`, so cancellation
+  and deadlines from the caller were silently ignored. The caller's ctx
+  is now forwarded.
+- **`io.EOF` comparisons use `errors.Is`.** `pubsub.StreamingPull` and the
+  `storage` multipart upload reader compared via `err == io.EOF`, which
+  fails once the error is wrapped; both now use `errors.Is`.
+- **Error propagation on deferred `Close` and PEM writes.** Deferred
+  `Close()` calls in `bigquery`, `pgwire`, and `tlsx` no longer drop
+  errors; `tlsx.writePEM` returns the close error via a named return so a
+  half-written PEM surfaces instead of silently committing.
+- **Logging timestamp parse + memorystore start errors wrap properly.**
+  `%v` → `%w` in the logging timestamp error path; `memorystore` start
+  failures now join both underlying errors with `errors.Join`.
+
 ## [0.3.0] - 2026-05-15
 
 ### Added
@@ -233,7 +342,8 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.4.0
 [0.3.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.3.0
 [0.2.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.2.0
 [0.1.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.1.0

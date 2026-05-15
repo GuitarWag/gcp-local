@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -129,6 +130,53 @@ func matchResourceNames(req listRequest, e logEntry) bool {
 		}
 	}
 	return false
+}
+
+// ConsoleEntries returns the most-recent log entries that match the
+// optional filter, sorted newest-first. Used by the /console UI.
+func (s *Service) ConsoleEntries(limit int, filter string) ([]map[string]any, error) {
+	pred, err := parseFilter(filter)
+	if err != nil {
+		return nil, err
+	}
+	all, _ := s.store.List(nsEntries, "")
+	entries := make([]logEntry, 0, len(all))
+	for _, v := range all {
+		var e logEntry
+		if json.Unmarshal(v, &e) != nil {
+			continue
+		}
+		if !pred(e) {
+			continue
+		}
+		entries = append(entries, e)
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Timestamp.After(entries[j].Timestamp)
+	})
+	if limit > 0 && len(entries) > limit {
+		entries = entries[:limit]
+	}
+	// Project to a stable wire shape for the console — flatten
+	// textPayload/jsonPayload to a single `message` string so the JS
+	// renderer doesn't have to branch.
+	out := make([]map[string]any, 0, len(entries))
+	for _, e := range entries {
+		msg := e.TextPayload
+		if msg == "" && e.JSONPayload != nil {
+			if b, err := json.Marshal(e.JSONPayload); err == nil {
+				msg = string(b)
+			}
+		}
+		out = append(out, map[string]any{
+			"timestamp": e.Timestamp.Format(time.RFC3339Nano),
+			"severity":  e.Severity,
+			"logName":   e.LogName,
+			"insertId":  e.InsertID,
+			"message":   msg,
+		})
+	}
+	return out, nil
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
