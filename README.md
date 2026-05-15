@@ -220,6 +220,8 @@ gcp-local start --no-daemon      # foreground (CI-friendly)
 gcp-local start --tls            # HTTPS with a self-signed cert
 gcp-local status                 # readiness summary
 gcp-local env                    # print exports for the current shell
+gcp-local gcloud-setup           # point the gcloud CLI at the emulator
+gcp-local gcloud-teardown        # restore the default gcloud config
 gcp-local stop
 gcp-local reset                  # wipe all state
 gcp-local trust install          # add the generated cert to macOS keychain
@@ -303,6 +305,22 @@ export GOOGLE_APPLICATION_CREDENTIALS=~/.gcp-local/fake-creds.json
 A fake service account JSON is written to `~/.gcp-local/fake-creds.json` on
 first start; it satisfies SDK auth checks without contacting Google's token
 endpoint.
+
+## Using with `gcloud`
+
+The SDK env vars don't reach the `gcloud` CLI. To point `gcloud` commands
+(`gcloud storage cp ...`, `gcloud pubsub topics publish ...`,
+`gcloud secrets versions access ...`) at the emulator instead of real GCP:
+
+```bash
+eval "$(gcp-local gcloud-setup)"        # create + activate a dedicated gcloud config
+gcloud storage buckets create gs://demo  # hits localhost:4443
+
+eval "$(gcp-local gcloud-teardown)"      # switch back to your default gcloud config
+```
+
+See [docs/gcloud.md](docs/gcloud.md) for the full setup, per-service
+example commands, and which `gcloud` verbs work against the emulator.
 
 ## TLS
 
