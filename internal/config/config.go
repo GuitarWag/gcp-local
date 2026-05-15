@@ -96,7 +96,17 @@ type Memorystore struct {
 }
 
 type CloudSQL struct {
-	Enabled bool `yaml:"enabled"`
+	Enabled   bool               `yaml:"enabled"`
+	BasePort  int                `yaml:"base_port"`
+	Instances []CloudSQLInstance `yaml:"instances"`
+}
+
+type CloudSQLInstance struct {
+	Name     string `yaml:"name"`
+	Engine   string `yaml:"engine"`
+	Port     int    `yaml:"port"`
+	Database string `yaml:"database"`
+	Seed     string `yaml:"seed"`
 }
 
 type CloudRun struct {
@@ -153,7 +163,7 @@ func Default() *Config {
 			Bigtable:      Bigtable{Enabled: true},
 			Spanner:       Spanner{Enabled: true},
 			Memorystore:   Memorystore{Enabled: false},
-			CloudSQL:      CloudSQL{Enabled: true},
+			CloudSQL:      CloudSQL{Enabled: true, BasePort: 5432},
 			CloudRun:      CloudRun{Enabled: true},
 			Functions:     Functions{Enabled: true},
 		},

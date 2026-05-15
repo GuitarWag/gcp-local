@@ -279,7 +279,7 @@ services:
 | Memorystore      | working           | miniredis on its own port. Disabled by default.    |
 | Cloud Run        | partial           | REST CRUD + invoke proxy to `backendUrl`. No subprocess execution. |
 | Cloud Functions  | partial           | Same shape as Cloud Run.                           |
-| CloudSQL         | stub              | REST instance management only.                     |
+| CloudSQL         | working (subset)  | REST instance admin + real Postgres wire protocol (`sqlite` engine). Per-instance TCP listener, SQL: schema, CRUD, `$N` params, `RETURNING`. pgembedded opt-in not yet implemented. |
 | Bigtable         | stub              | gRPC connection succeeds; data methods return `UNIMPLEMENTED`. |
 | Spanner          | stub              | `CreateSession` works; data methods return `UNIMPLEMENTED`. |
 | Dataflow         | not implemented   |                                                     |
@@ -369,7 +369,9 @@ matches it with these explicit gaps:
 - Routing is URL-prefix, not Host header (functionally equivalent for
   emulator use).
 - BigQuery uses pure-Go SQLite, not DuckDB. SQL surface is a subset.
-- CloudSQL has no DB engine — only the instance admin REST API.
+- CloudSQL ships the default `sqlite` engine behind a Postgres wire shim
+  (pgproto3 + modernc.org/sqlite). The `postgres` engine (real pgembedded
+  binary) is not implemented yet, and MySQL is not implemented at all.
 - Bigtable and Spanner are gRPC stubs that return `UNIMPLEMENTED` for data
   operations.
 - Cloud Run / Cloud Functions proxy to an existing `backendUrl`. There is no
