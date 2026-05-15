@@ -1,0 +1,146 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - copyloopvar
+    - errcheck
+    - errorlint
+    - gocheckcompilerdirectives
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - nilerr
+    - nolintlint
+    - revive
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+    - usestdlibvars
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+      exclude-functions:
+        - (net/http.ResponseWriter).Write
+        - fmt.Fprintln
+        - fmt.Fprintf
+        - fmt.Fprint
+        - (*encoding/json.Encoder).Encode
+    gosec:
+      excludes:
+        - G304 # File path provided as taint input — paths come from API requests by design.
+        - G404 # Insecure random — emulator does not need crypto-grade randomness.
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+          disabled: true
+        - name: increment-decrement
+        - name: var-naming
+        - name: var-declaration
+        - name: package-comments
+          disabled: true
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unreachable-code
+        - name: redefines-builtin-id
+    staticcheck:
+      checks:
+        - all
+        - -ST1000 # Package comment — not enforced.
+        - -ST1003 # Identifier naming — too noisy on Google API field names.
+
+  exclusions:
+    rules:
+      - path: _test\.go$
+        linters:
+          - errcheck
+          - gosec
+          - unparam
+      - path: tests/
+        linters:
+          - errcheck
+          - gosec
+          - unparam
+      # Pub/Sub gRPC server is wired to cloud.google.com/go/pubsub/apiv1/pubsubpb.
+      # Migration to v2 is tracked separately.
+      - path: internal/services/pubsub/grpc\.go$
+        linters:
+          - staticcheck
+        text: "SA1019"
+      # Auth fake creds are documented and intentional.
+      - path: internal/auth/credentials\.go$
+        linters:
+          - gosec
+        text: "G101|G117"
+      # BigQuery DDL operates on SQLite under the hood; identifiers are
+      # derived from validated project/dataset/table IDs, not raw user input.
+      - path: internal/services/bigquery/bigquery\.go$
+        linters:
+          - gosec
+        text: "G201|G701"
+      # Storage write paths return object bytes verbatim by spec (GCS proxies
+      # arbitrary content). MD5 is used for GCS ETag/hash, not crypto.
+      - path: internal/services/storage/
+        linters:
+          - gosec
+        text: "G705|G501|G401"
+      # Cloud Run "invoke" proxies the request to a configured backend by design.
+      - path: internal/services/cloudrun/cloudrun\.go$
+        linters:
+          - gosec
+        text: "G704"
+      # tlsx trust shells out to macOS `security` to manage system keychain;
+      # paths come from the local config file, not network input.
+      - path: internal/tlsx/
+        linters:
+          - gosec
+        text: "G204"
+      # gcp-local daemon re-execs itself for daemon mode.
+      - path: cmd/gcp-local/main\.go$
+        linters:
+          - gosec
+        text: "G204|G702"
+      # Pub/Sub push delivery returns subscriber HTTP response bytes verbatim.
+      - path: internal/services/pubsub/pubsub\.go$
+        linters:
+          - gosec
+        text: "G705"
+      # Postgres wire protocol encodes/decodes fixed-width integers as bytes;
+      # the conversions are bounded by the wire format itself.
+      - path: internal/services/cloudsql/pgwire/types\.go$
+        linters:
+          - gosec
+        text: "G115"
+      # Pub/Sub gRPC API uses int32 for AckDeadlineSeconds, but the stored
+      # value is validated to fit (max 600s).
+      - path: internal/services/pubsub/grpc\.go$
+        linters:
+          - gosec
+        text: "G115"
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

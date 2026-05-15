@@ -13,10 +13,10 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// RegisterGRPC attaches the Publisher and Subscriber services to s grpc Server.
-func (svc *Service) RegisterGRPC(g *grpc.Server) {
-	pb.RegisterPublisherServer(g, &publisherServer{svc: svc})
-	pb.RegisterSubscriberServer(g, &subscriberServer{svc: svc})
+// RegisterGRPC attaches the Publisher and Subscriber services to the grpc Server.
+func (s *Service) RegisterGRPC(g *grpc.Server) {
+	pb.RegisterPublisherServer(g, &publisherServer{svc: s})
+	pb.RegisterSubscriberServer(g, &subscriberServer{svc: s})
 }
 
 type publisherServer struct {
@@ -191,7 +191,7 @@ func (s *subscriberServer) StreamingPull(stream pb.Subscriber_StreamingPullServe
 	go func() {
 		for {
 			req, err := stream.Recv()
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				recvErr <- nil
 				return
 			}

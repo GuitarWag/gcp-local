@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/GuitarWag/gcp-local/internal/config"
@@ -47,7 +46,6 @@ type Service struct {
 	kind    Kind
 	ns      string
 	client  *http.Client
-	mu      sync.Mutex
 }
 
 func NewCloudRun(store state.Store, cfg *config.Config) (*Service, error) {
@@ -209,7 +207,7 @@ func (s *Service) invoke(w http.ResponseWriter, r *http.Request, parts []string)
 		writeErr(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	for k, vs := range resp.Header {
 		for _, v := range vs {
 			w.Header().Add(k, v)

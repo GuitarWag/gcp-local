@@ -127,17 +127,17 @@ func (s *session) handleExecute(ctx context.Context, m *pgproto3.Execute) {
 // the type based on the Go value they're encoding, which is exactly what we
 // want since SQLite is dynamically typed.
 func inferParamOIDs(stmt *preparedStmt) []uint32 {
-	max := 0
+	count := 0
 	for _, idx := range stmt.paramOrder {
-		if idx > max {
-			max = idx
+		if idx > count {
+			count = idx
 		}
 	}
-	if max < len(stmt.paramOIDs) {
-		max = len(stmt.paramOIDs)
+	if count < len(stmt.paramOIDs) {
+		count = len(stmt.paramOIDs)
 	}
-	out := make([]uint32, max)
-	for i := 0; i < max; i++ {
+	out := make([]uint32, count)
+	for i := 0; i < count; i++ {
 		if i < len(stmt.paramOIDs) {
 			out[i] = stmt.paramOIDs[i]
 		}

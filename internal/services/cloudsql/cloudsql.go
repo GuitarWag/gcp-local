@@ -17,7 +17,7 @@ import (
 	"github.com/GuitarWag/gcp-local/internal/services/cloudsql/pgwire"
 	"github.com/GuitarWag/gcp-local/internal/state"
 
-	_ "modernc.org/sqlite"
+	_ "modernc.org/sqlite" // sqlite driver registered as "sqlite" with database/sql
 )
 
 // CloudSQL accepts real Postgres-wire connections backed by an in-memory

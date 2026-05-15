@@ -106,12 +106,16 @@ func generate(p Paths) error {
 	return nil
 }
 
-func writePEM(path string, mode os.FileMode, blockType string, der []byte) error {
+func writePEM(path string, mode os.FileMode, blockType string, der []byte) (err error) {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
 	if err != nil {
 		return fmt.Errorf("open %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("close %s: %w", path, cerr)
+		}
+	}()
 	if err := pem.Encode(f, &pem.Block{Type: blockType, Bytes: der}); err != nil {
 		return fmt.Errorf("encode pem %s: %w", path, err)
 	}

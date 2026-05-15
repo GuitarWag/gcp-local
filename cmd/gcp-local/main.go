@@ -252,7 +252,7 @@ func runStatus() int {
 		fmt.Printf("status: pid=%d alive, healthz unreachable: %v\n", info.PID, err)
 		return 2
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		fmt.Printf("status: pid=%d alive, /healthz=%d\n", info.PID, resp.StatusCode)
@@ -312,7 +312,7 @@ func runReset(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("reset failed: %d %s", resp.StatusCode, body)

@@ -11,7 +11,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/GuitarWag/gcp-local/internal/config"
@@ -33,7 +32,6 @@ type cryptoKeyResource struct {
 	Name       string    `json:"name"`
 	Purpose    string    `json:"purpose"`
 	CreateTime time.Time `json:"createTime"`
-	keyBytes   []byte    // 32-byte AES-256 key (not serialised)
 }
 
 type cryptoKeyStored struct {
@@ -63,7 +61,6 @@ type decryptResponse struct {
 type Service struct {
 	store   state.Store
 	project string
-	mu      sync.Mutex
 }
 
 func New(store state.Store, cfg *config.Config) (*Service, error) {

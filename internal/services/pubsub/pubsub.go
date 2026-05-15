@@ -380,7 +380,7 @@ func (s *Service) PublishMessages(topic string, msgs []Message) ([]string, error
 	return ids, nil
 }
 
-func (s *Service) PullMessages(subName string, max int) ([]Received, error) {
+func (s *Service) PullMessages(subName string, limit int) ([]Received, error) {
 	data, err := s.store.Get(nsSubscriptions, subName)
 	if err != nil {
 		return nil, ErrSubMissing
@@ -391,8 +391,8 @@ func (s *Service) PullMessages(subName string, max int) ([]Received, error) {
 	if ackSec <= 0 {
 		ackSec = 10
 	}
-	if max <= 0 {
-		max = 10
+	if limit <= 0 {
+		limit = 10
 	}
 	now := time.Now()
 	deadline := now.Add(time.Duration(ackSec) * time.Second)
@@ -400,9 +400,9 @@ func (s *Service) PullMessages(subName string, max int) ([]Received, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	q := s.queues[subName]
-	out := make([]Received, 0, max)
+	out := make([]Received, 0, limit)
 	for i := range q {
-		if len(out) >= max {
+		if len(out) >= limit {
 			break
 		}
 		if !q[i].available(now) {
@@ -714,7 +714,7 @@ func (s *Service) startPusher(sub subscriptionResource) {
 		s.pushMu.Unlock()
 		return
 	}
-	ctx, cancel := context.WithCancel(s.ctx)
+	ctx, cancel := context.WithCancel(s.ctx) //nolint:gosec // G118: cancel stored in pushers; stopPusher and Stop invoke it.
 	s.pushers[sub.Name] = cancel
 	s.pushMu.Unlock()
 
@@ -828,7 +828,7 @@ func (s *Service) deliver(ctx context.Context, subName, endpoint string, rec Rec
 	if err != nil {
 		return false
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	return resp.StatusCode >= 200 && resp.StatusCode < 300
 }
 

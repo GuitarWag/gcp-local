@@ -2,6 +2,7 @@ package memorystore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -29,7 +30,7 @@ func New(_ any, cfg *config.Config) (*Service, error) {
 	if err := r.StartAddr(addr); err != nil {
 		// Fall back to an OS-chosen port if the requested one is busy.
 		if err2 := r.Start(); err2 != nil {
-			return nil, fmt.Errorf("start miniredis (%v, %v)", err, err2)
+			return nil, fmt.Errorf("start miniredis: %w", errors.Join(err, err2))
 		}
 		// extract the chosen port
 		if h, p, err := net.SplitHostPort(r.Addr()); err == nil {

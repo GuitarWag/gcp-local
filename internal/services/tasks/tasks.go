@@ -55,7 +55,6 @@ type Service struct {
 	project string
 	client  *http.Client
 
-	mu       sync.Mutex
 	taskSeq  uint64
 	ctx      context.Context
 	cancel   context.CancelFunc

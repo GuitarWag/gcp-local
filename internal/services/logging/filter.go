@@ -152,7 +152,7 @@ func isNumber(s string) bool {
 	for i := 0; i < len(s); i++ {
 		c := s[i]
 		if c < '0' || c > '9' {
-			if !(i == 0 && (c == '-' || c == '+')) {
+			if i != 0 || (c != '-' && c != '+') {
 				return false
 			}
 		}
@@ -229,11 +229,11 @@ func (p *parser) parsePredicate() (predicate, error) {
 	if val == nil || (val.kind != tString && val.kind != tIdent && val.kind != tNumber) {
 		return nil, fmt.Errorf("expected value after %q %q", field.val, op.val)
 	}
-	return buildPredicate(field.val, op.val, val.val, val.kind)
+	return buildPredicate(field.val, op.val, val.val)
 }
 
 // buildPredicate ties a (field, op, value) triple to its evaluator.
-func buildPredicate(field, op, val string, valKind tokKind) (predicate, error) {
+func buildPredicate(field, op, val string) (predicate, error) {
 	switch {
 	case field == "severity":
 		want, ok := severityRank[strings.ToUpper(val)]
@@ -306,7 +306,7 @@ func buildPredicate(field, op, val string, valKind tokKind) (predicate, error) {
 	case field == "timestamp":
 		ts, err := time.Parse(time.RFC3339, val)
 		if err != nil {
-			return nil, fmt.Errorf("timestamp value %q is not RFC3339: %v", val, err)
+			return nil, fmt.Errorf("timestamp value %q is not RFC3339: %w", val, err)
 		}
 		cmp, err := timeCmp(op)
 		if err != nil {

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -47,7 +46,6 @@ type listResponse struct {
 type Service struct {
 	store state.Store
 	seq   uint64
-	mu    sync.Mutex
 }
 
 func New(store state.Store, _ *config.Config) (*Service, error) {
