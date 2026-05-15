@@ -8,7 +8,7 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
-## [0.4.0] - 2026-05-15
+## [0.5.0] - 2026-05-15
 
 ### Added
 
@@ -88,6 +88,15 @@ Until 1.0.0, breaking changes may land in minor releases.
   Cloud Run `invoke`, fake service-account JSON, local-config paths in
   daemon re-exec and TLS key writes). CLAUDE.md pre-push gate now runs
   `golangci-lint run ./...` alongside `go vet` and `gofmt`. Closes #19.
+- **`gcloud` CLI setup against the emulator.** New `gcp-local gcloud-setup`
+  and `gcp-local gcloud-teardown` subcommands print shell snippets
+  (mirroring `gcp-local env`) that create a dedicated `gcp-local` gcloud
+  configuration, disable credentials, and wire
+  `api_endpoint_overrides/<service>` for every service the emulator
+  supports — then switch back to the user's default configuration. New
+  `docs/gcloud.md` walks through the eval-based workflow, manual fallback,
+  and per-service example commands. README gains a short "Using with
+  `gcloud`" section. Closes #16.
 
 ### Changed
 
@@ -116,20 +125,6 @@ Until 1.0.0, breaking changes may land in minor releases.
 - **Logging timestamp parse + memorystore start errors wrap properly.**
   `%v` → `%w` in the logging timestamp error path; `memorystore` start
   failures now join both underlying errors with `errors.Join`.
-
-## [0.3.0] - 2026-05-15
-
-### Added
-
-- **`gcloud` CLI setup against the emulator.** New `gcp-local gcloud-setup`
-  and `gcp-local gcloud-teardown` subcommands print shell snippets
-  (mirroring `gcp-local env`) that create a dedicated `gcp-local` gcloud
-  configuration, disable credentials, and wire
-  `api_endpoint_overrides/<service>` for every service the emulator
-  supports — then switch back to the user's default configuration. New
-  `docs/gcloud.md` walks through the eval-based workflow, manual fallback,
-  and per-service example commands. README gains a short "Using with
-  `gcloud`" section. Closes #16.
 
 ## [0.2.0] - 2026-05-14
 
@@ -342,8 +337,7 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.4.0...HEAD
-[0.4.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.4.0
-[0.3.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.3.0
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.5.0
 [0.2.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.2.0
 [0.1.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.1.0
