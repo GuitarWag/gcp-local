@@ -17,13 +17,15 @@ counterpart — same model, different cloud, written in pure Go as a single
 download.
 
 ```bash
-go install github.com/GuitarWag/gcp-local/cmd/gcp-local@latest
+curl -sSL https://raw.githubusercontent.com/GuitarWag/gcp-local/main/install.sh | sh
 gcp-local start
 eval $(gcp-local env)
 ```
 
 Your `cloud.google.com/go/storage`, `google-cloud-pubsub`, `@google-cloud/firestore`
 clients will start hitting the local emulator. No code changes.
+
+(Go devs: `go install github.com/GuitarWag/gcp-local/cmd/gcp-local@latest` works too — see [Install](#install) for the full list.)
 
 ---
 
