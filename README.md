@@ -287,8 +287,8 @@ services:
 | Firestore        | working (subset)  | gRPC: `Commit`, `GetDocument`, `RunQuery`, `BatchWrite`, `Listen` streaming (DocumentRef + Query snapshots, no Where/OrderBy filters). |
 | BigQuery         | working (subset)  | SQLite backend. REST datasets/tables/insertAll/queries. Typed column schema. SQL: `SELECT`/`INSERT`, `JOIN ... ON`, `GROUP BY`, `HAVING`, aggregates (`COUNT`/`SUM`/`AVG`/`MIN`/`MAX`), `ORDER BY`. Scalar translation: `CURRENT_TIMESTAMP()`, `SAFE_CAST` (no NULL-on-failure), `CONCAT`, `IFNULL`. Not translated: window functions, `STRUCT`, `ARRAY`, `UNNEST`, `PARTITION BY`, `WITH RECURSIVE`, BigQuery-specific date arithmetic. |
 | Memorystore      | working           | miniredis on its own port. Disabled by default.    |
-| Cloud Run        | partial           | REST CRUD + invoke proxy to `backendUrl`. No subprocess execution. |
-| Cloud Functions  | partial           | Same shape as Cloud Run.                           |
+| Cloud Run        | working (subset)  | REST CRUD + invoke. Either proxies to `backendUrl` or spawns the configured `command` on first invoke (PORT + K_SERVICE env, cached child handle, terminated on resource delete / shutdown). No container image support. |
+| Cloud Functions  | working (subset)  | Same shape as Cloud Run.                           |
 | CloudSQL         | working (subset)  | REST instance admin + real Postgres wire protocol (`sqlite` engine). Per-instance TCP listener, SQL: schema, CRUD, `$N` params, `RETURNING`. pgembedded opt-in not yet implemented. |
 | Bigtable         | stub              | gRPC connection succeeds; data methods return `UNIMPLEMENTED`. |
 | Spanner          | stub              | `CreateSession` works; data methods return `UNIMPLEMENTED`. |
@@ -400,8 +400,9 @@ matches it with these explicit gaps:
   binary) is not implemented yet, and MySQL is not implemented at all.
 - Bigtable and Spanner are gRPC stubs that return `UNIMPLEMENTED` for data
   operations.
-- Cloud Run / Cloud Functions proxy to an existing `backendUrl`. There is no
-  subprocess execution.
+- Cloud Run / Cloud Functions can spawn a local executable (`command:` on the
+  resource) or proxy to an existing `backendUrl`. There is no container image
+  support — bring your own binary.
 - Dataflow, Vertex AI, AlloyDB, Cloud SQL MySQL — not implemented.
 - Default state backend is `memory`, not `boltdb`.
 

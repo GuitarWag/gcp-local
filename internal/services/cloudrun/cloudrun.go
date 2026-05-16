@@ -34,10 +34,12 @@ const (
 )
 
 type resource struct {
-	Name       string    `json:"name"`
-	BackendURL string    `json:"backendUrl,omitempty"`
-	CreateTime time.Time `json:"createTime"`
-	Kind       Kind      `json:"-"`
+	Name       string            `json:"name"`
+	BackendURL string            `json:"backendUrl,omitempty"`
+	Command    []string          `json:"command,omitempty"`
+	Env        map[string]string `json:"env,omitempty"`
+	CreateTime time.Time         `json:"createTime"`
+	Kind       Kind              `json:"-"`
 }
 
 type Service struct {
@@ -46,6 +48,7 @@ type Service struct {
 	kind    Kind
 	ns      string
 	client  *http.Client
+	runner  *runner
 }
 
 func NewCloudRun(store state.Store, cfg *config.Config) (*Service, error) {
@@ -63,7 +66,14 @@ func newSvc(store state.Store, cfg *config.Config, kind Kind, ns string) *Servic
 		kind:    kind,
 		ns:      ns,
 		client:  &http.Client{Timeout: 30 * time.Second},
+		runner:  newRunner(),
 	}
+}
+
+// Stop terminates any child processes spawned for resources managed by this
+// service. Called by the gateway during shutdown.
+func (s *Service) Stop() {
+	s.runner.stopAll()
 }
 
 func (s *Service) Name() string {
@@ -169,6 +179,7 @@ func (s *Service) item(w http.ResponseWriter, r *http.Request, parts []string) {
 			writeErr(w, http.StatusNotFound, "not found")
 			return
 		}
+		s.runner.stop(name)
 		w.WriteHeader(http.StatusOK)
 	default:
 		writeErr(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -187,12 +198,21 @@ func (s *Service) invoke(w http.ResponseWriter, r *http.Request, parts []string)
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if res.BackendURL == "" {
-		writeErr(w, http.StatusBadRequest, "no backendUrl set; subprocess execution not supported in this build")
+	target := res.BackendURL
+	if len(res.Command) > 0 {
+		c, err := s.runner.startOrGet(r.Context(), name, res.Command, res.Env)
+		if err != nil {
+			writeErr(w, http.StatusBadGateway, "spawn child: "+err.Error())
+			return
+		}
+		target = c.baseURL
+	}
+	if target == "" {
+		writeErr(w, http.StatusBadRequest, "no backendUrl or command set on resource")
 		return
 	}
 	body, _ := io.ReadAll(r.Body)
-	req, err := http.NewRequest(r.Method, res.BackendURL, bytes.NewReader(body))
+	req, err := http.NewRequest(r.Method, target, bytes.NewReader(body))
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
