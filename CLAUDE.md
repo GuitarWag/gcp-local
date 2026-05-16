@@ -110,22 +110,21 @@ Graduate `[Unreleased]` to a new versioned heading before merge:
    re-add an empty `## [Unreleased]` above it, and update the link
    footnotes at the bottom (new `[X.Y.Z]:` line + bump `[Unreleased]:` to
    `compare/vX.Y.Z...HEAD`).
-3. After the PR merges to `main`, tag and push:
+3. The merge to `main` triggers `.github/workflows/auto-tag.yml`, which
+   reads the topmost semver section from `CHANGELOG.md`, pushes
+   `vX.Y.Z` if it doesn't already exist, and runs goreleaser. Binaries
+   for darwin/linux × amd64/arm64 + a GitHub Release land within a
+   couple of minutes. No manual `git tag` step is needed.
 
-   ```bash
-   git checkout main && git pull
-   git tag vX.Y.Z
-   git push origin vX.Y.Z
-   ```
-
-   The tag push triggers `.github/workflows/release.yml` → goreleaser
-   builds binaries for darwin/linux × amd64/arm64 and creates the GitHub
-   Release.
+   `release.yml` is still wired to `push: tags: v*` as a manual escape
+   hatch — if you ever push a tag by hand, it'll fire goreleaser the
+   same way. The two don't double-trigger because tags pushed via
+   `GITHUB_TOKEN` (what `auto-tag.yml` uses) don't fire other workflows.
 
 The agent opening the PR is responsible for the CHANGELOG entry and the
-version bump in the same diff. Tag push happens post-merge by whoever
-merges. If you're unsure about the version bump, propose one in the PR
-description and let the maintainer correct it before merge.
+version bump in the same diff. If you're unsure about the version bump,
+propose one in the PR description and let the maintainer correct it
+before merge.
 
 ## Conventions
 

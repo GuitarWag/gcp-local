@@ -8,6 +8,21 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-05-15
+
+### Changed
+
+- **Auto-tag releases when `CHANGELOG.md` graduates a new version.** New
+  `.github/workflows/auto-tag.yml` runs on every push to `main` that
+  touches `CHANGELOG.md`, reads the topmost `## [X.Y.Z] - YYYY-MM-DD`
+  section, and if no matching `vX.Y.Z` tag exists yet, pushes the tag
+  and runs goreleaser in the same job. Closes the gap that left 0.3.0
+  and 0.4.0 unreleased (the CHANGELOG graduated them but nobody pushed
+  the tag, so the existing tag-triggered `release.yml` never fired).
+  `release.yml` stays as a manual escape hatch for tag pushes that
+  bypass `CHANGELOG.md`. CLAUDE.md's release section is updated — step 3
+  (manual `git tag && git push`) is no longer required.
+
 ## [0.5.0] - 2026-05-15
 
 ### Added
@@ -337,7 +352,8 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.5.1
 [0.5.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.5.0
 [0.2.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.2.0
 [0.1.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.1.0
