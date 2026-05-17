@@ -146,8 +146,11 @@ before merge.
 - Pub/Sub Go/Python/TS SDKs use gRPC when `PUBSUB_EMULATOR_HOST` is set, not
   REST. REST endpoints exist for completeness but are not what real clients
   hit by default.
-- Cloud Run/Functions `invoke` only proxies; there is no process spawning.
-  Tests pass a `backendUrl` to a `httptest.NewServer`.
+- Cloud Run/Functions `invoke` either proxies to a configured `backendUrl`
+  or spawns a local executable (`command:` on the resource, PORT + K_SERVICE
+  env, child handle cached and killed on delete / shutdown). No container
+  image support. Tests can pass either `backendUrl` (httptest server) or a
+  `command` pointing at a built fixture binary.
 - BigQuery uses SQLite, not DuckDB. SQL surface is small; tests stay in
   simple `SELECT/INSERT` territory.
 - Memorystore is disabled by default because it grabs its own port. Enable
@@ -157,10 +160,10 @@ before merge.
 
 ## What's not done
 
-See README.md "Divergences from the design spec". Short version: CloudSQL
-(no DB engine), Bigtable / Spanner (stubs), Cloud Run / Functions (no
-subprocess execution), Dataflow / Vertex AI / AlloyDB (not started).
-BigQuery uses SQLite instead of DuckDB.
+See README.md "Divergences from the design spec". Short version: Bigtable /
+Spanner (stubs), Cloud Run / Functions (no container image support — only
+exec a local binary or proxy to a URL), Dataflow / Vertex AI / AlloyDB
+(not started). BigQuery uses SQLite instead of DuckDB.
 
 ## Don't
 

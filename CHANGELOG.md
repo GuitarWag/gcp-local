@@ -8,6 +8,21 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-05-16
+
+### Added
+
+- **Cloud Run / Cloud Functions: spawn a local binary on `invoke`.**
+  Resources accept a `command` (path + args) and optional `env` map at
+  create time. On the first `:invoke`, `gcp-local` allocates a free
+  loopback port, execs the command with `PORT`, `K_SERVICE`, and the
+  caller-supplied env, waits for the child to bind the port, then
+  proxies the request to it. Subsequent invokes reuse the cached child
+  handle; deleting the resource or shutting the emulator down terminates
+  the child. The existing `backendUrl` proxy path is unchanged — if both
+  are set, `command` wins. No container image support: bring your own
+  binary. Closes #1.
+
 ## [0.5.1] - 2026-05-15
 
 ### Changed
@@ -352,7 +367,8 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.6.0
 [0.5.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.5.1
 [0.5.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.5.0
 [0.2.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.2.0

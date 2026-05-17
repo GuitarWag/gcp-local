@@ -476,6 +476,12 @@ func (g *Gateway) Run(ctx context.Context) error {
 		if g.bq != nil {
 			_ = g.bq.Close()
 		}
+		if g.run != nil {
+			g.run.Stop()
+		}
+		if g.funcs != nil {
+			g.funcs.Stop()
+		}
 		g.grpc.GracefulStop()
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			return err
