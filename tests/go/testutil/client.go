@@ -45,6 +45,13 @@ func Start(t *testing.T) *Emulator {
 // added automatically. If "--tls" appears in extraArgs the readiness probe
 // switches to HTTPS with InsecureSkipVerify.
 func StartArgs(t *testing.T, extraArgs ...string) *Emulator {
+	return StartArgsEnv(t, nil, extraArgs...)
+}
+
+// StartArgsEnv is StartArgs plus extra environment variables for the
+// child process. extraEnv values follow the "KEY=VALUE" form expected
+// by os/exec. Nil or empty means inherit only the parent environment.
+func StartArgsEnv(t *testing.T, extraEnv []string, extraArgs ...string) *Emulator {
 	t.Helper()
 	binPath := BinaryPath(t)
 	port := freePort(t)
@@ -59,6 +66,9 @@ func StartArgs(t *testing.T, extraArgs ...string) *Emulator {
 
 	cmdArgs := append([]string{"start", "--port=" + strconv.Itoa(port), "--no-daemon"}, extraArgs...)
 	cmd := exec.CommandContext(ctx, binPath, cmdArgs...)
+	if len(extraEnv) > 0 {
+		cmd.Env = append(os.Environ(), extraEnv...)
+	}
 	// Discard the child's stdio. Inheriting the test runner's stderr keeps
 	// the I/O pipes open after the child exits and trips go test's
 	// WaitDelay under parallel CI execution.

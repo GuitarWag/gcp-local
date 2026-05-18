@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 	"google.golang.org/grpc"
@@ -83,7 +85,7 @@ func New(cfg *config.Config, build BuildInfo) (*Gateway, error) {
 		mux:    http.NewServeMux(),
 		health: health.New(),
 		build:  build,
-		grpc:   grpc.NewServer(),
+		grpc:   grpc.NewServer(grpc.StatsHandler(otelgrpc.NewServerHandler())),
 	}
 
 	g.mux.HandleFunc("/healthz", g.health.Handler())
@@ -402,14 +404,12 @@ func splitPath(path, prefix string) []string {
 }
 
 func (g *Gateway) handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if os.Getenv("GCP_LOCAL_DEBUG") == "1" {
-			fmt.Fprintf(os.Stderr, "REQ %s %s proto=%d ct=%q\n", r.Method, r.URL.String(), r.ProtoMajor, r.Header.Get("Content-Type"))
-		}
-		if r.ProtoMajor == 2 && strings.HasPrefix(r.Header.Get("Content-Type"), "application/grpc") {
-			g.grpc.ServeHTTP(w, r)
-			return
-		}
+	// otelhttp extracts the W3C traceparent header (when present) and
+	// starts a server span named after the request method+path. When
+	// tracing is disabled the global provider is a no-op, so the
+	// wrapper degenerates to a couple of cheap interface calls per
+	// request.
+	rest := otelhttp.NewHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, pattern := g.mux.Handler(r)
 		if pattern == "" && g.storage != nil {
 			if g.storage.HandleXML(w, r) {
@@ -417,6 +417,23 @@ func (g *Gateway) handler() http.Handler {
 			}
 		}
 		g.mux.ServeHTTP(w, r)
+	}), "gcp-local",
+		otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
+			return r.Method + " " + r.URL.Path
+		}),
+	)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if os.Getenv("GCP_LOCAL_DEBUG") == "1" {
+			fmt.Fprintf(os.Stderr, "REQ %s %s proto=%d ct=%q\n", r.Method, r.URL.String(), r.ProtoMajor, r.Header.Get("Content-Type"))
+		}
+		if r.ProtoMajor == 2 && strings.HasPrefix(r.Header.Get("Content-Type"), "application/grpc") {
+			// gRPC already has its own otelgrpc StatsHandler; let it run
+			// without an extra otelhttp wrapper around the cleartext h2
+			// frame so spans aren't double-counted.
+			g.grpc.ServeHTTP(w, r)
+			return
+		}
+		rest.ServeHTTP(w, r)
 	})
 }
 

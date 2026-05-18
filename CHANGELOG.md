@@ -8,6 +8,28 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-05-18
+
+### Added
+
+- **OpenTelemetry tracing from the emulator.** Setting
+  `OTEL_EXPORTER_OTLP_ENDPOINT` switches on an OTLP HTTP trace
+  exporter; the gateway HTTP handler is wrapped with `otelhttp` and the
+  shared `grpc.Server` registers an `otelgrpc` stats handler, so every
+  REST and gRPC request gets a server span. The W3C tracecontext +
+  baggage propagators are installed unconditionally, which means a
+  `traceparent` header on the incoming request parents the emulator's
+  span onto the caller's trace — a Go app that already traces its work
+  sees app → emulator → state-store as one trace in Jaeger/Tempo. With
+  the env var unset (the default), the global tracer provider stays a
+  no-op, so the disabled path adds no exporter goroutine and no
+  per-request allocation beyond a couple of interface calls. All
+  standard `OTEL_*` env vars (`OTEL_SERVICE_NAME`,
+  `OTEL_RESOURCE_ATTRIBUTES`, `OTEL_EXPORTER_OTLP_HEADERS`,
+  `OTEL_EXPORTER_OTLP_PROTOCOL`, …) are honoured by the SDK. README
+  gains a "Tracing" section with a Jaeger all-in-one quickstart.
+  Closes #30.
+
 ## [0.6.0] - 2026-05-16
 
 ### Added
@@ -367,7 +389,8 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.7.0
 [0.6.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.6.0
 [0.5.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.5.1
 [0.5.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.5.0

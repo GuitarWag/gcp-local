@@ -18,6 +18,7 @@ import (
 	"github.com/GuitarWag/gcp-local/internal/auth"
 	"github.com/GuitarWag/gcp-local/internal/config"
 	"github.com/GuitarWag/gcp-local/internal/gateway"
+	"github.com/GuitarWag/gcp-local/internal/observability"
 	"github.com/GuitarWag/gcp-local/internal/pidfile"
 	"github.com/GuitarWag/gcp-local/internal/tlsx"
 )
@@ -133,6 +134,16 @@ func runStart(args []string) error {
 	if err != nil {
 		return fmt.Errorf("write creds: %w", err)
 	}
+
+	otelShutdown, err := observability.Init(context.Background(), "gcp-local", version)
+	if err != nil {
+		return fmt.Errorf("init otel: %w", err)
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = otelShutdown(ctx)
+	}()
 
 	gw, err := gateway.New(cfg, gateway.BuildInfo{Version: version, Commit: commit})
 	if err != nil {

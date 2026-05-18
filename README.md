@@ -355,6 +355,34 @@ gcp-local trust uninstall          # remove it
 On Linux the command prints manual `update-ca-certificates` / NSS instructions
 rather than poking system trust stores blindly. Windows is not supported.
 
+## Tracing
+
+`gcp-local` emits OpenTelemetry traces when the standard
+`OTEL_EXPORTER_OTLP_ENDPOINT` env var is set. With it unset (the
+default), the global tracer provider is a no-op and there is no
+exporter goroutine, so the disabled path costs nothing.
+
+When enabled, every HTTP request and gRPC call gets a server span;
+the W3C `traceparent` header on the incoming request is honoured, so
+an app that already traces its own work sees a single trace that
+threads through the emulator and back out to the state store.
+
+Quick local setup with Jaeger all-in-one:
+
+```bash
+docker run --rm -p 16686:16686 -p 4318:4318 \
+  jaegertracing/all-in-one:latest
+
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 \
+OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf \
+OTEL_SERVICE_NAME=gcp-local \
+  gcp-local start --no-daemon
+```
+
+Open `http://localhost:16686` to browse traces. Any standard `OTEL_*`
+env var the OpenTelemetry SDK understands works
+(`OTEL_RESOURCE_ATTRIBUTES`, `OTEL_EXPORTER_OTLP_HEADERS`, etc.).
+
 ## Architecture
 
 - One HTTP server with h2c. gRPC and REST share one port.
