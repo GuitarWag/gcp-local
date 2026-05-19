@@ -383,6 +383,11 @@ Open `http://localhost:16686` to browse traces. Any standard `OTEL_*`
 env var the OpenTelemetry SDK understands works
 (`OTEL_RESOURCE_ATTRIBUTES`, `OTEL_EXPORTER_OTLP_HEADERS`, etc.).
 
+`OTEL_EXPORTER_OTLP_PROTOCOL` (or the traces-specific
+`OTEL_EXPORTER_OTLP_TRACES_PROTOCOL`) selects the exporter wire format.
+`http/protobuf` is the default; `grpc` switches to OTLP/gRPC against an
+OTLP-gRPC collector. Any other value is rejected at start-up.
+
 ## Architecture
 
 - One HTTP server with h2c. gRPC and REST share one port.
