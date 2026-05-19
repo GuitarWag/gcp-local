@@ -76,7 +76,8 @@ func TestOTLPTraceExportPropagatesTraceparent(t *testing.T) {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	t.Fatalf("OTLP receiver did not record exported span with trace id %s within timeout; %d bodies seen", hex.EncodeToString(traceIDBytes), rec.bodyCount())
+	t.Fatalf("OTLP receiver did not record exported span with trace id %s within timeout; %d bodies seen, first body=%s",
+		hex.EncodeToString(traceIDBytes), rec.bodyCount(), rec.firstBodyHex(256))
 }
 
 type otlpReceiver struct {
@@ -139,6 +140,19 @@ func (r *otlpReceiver) bodyCount() int {
 	return len(r.bodies)
 }
 
+func (r *otlpReceiver) firstBodyHex(max int) string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.bodies) == 0 {
+		return "<none>"
+	}
+	b := r.bodies[0]
+	if len(b) > max {
+		return hex.EncodeToString(b[:max]) + "...(truncated)"
+	}
+	return hex.EncodeToString(b)
+}
+
 // TestOTLPDisabledByDefault asserts that without OTEL_EXPORTER_OTLP_ENDPOINT
 // the emulator exports nothing, even if a downstream OTLP receiver
 // happens to be listening. This is the "no measurable overhead when
@@ -156,8 +170,10 @@ func TestOTLPDisabledByDefault(t *testing.T) {
 	}
 	_ = resp.Body.Close()
 
-	// Generous wait — the SDK's default batcher would have shipped
-	// well within this window if it were active.
+	// With tracing disabled there is no exporter goroutine at all, so
+	// any non-zero body count below proves a regression rather than a
+	// timing race. The wait just gives the (non-existent) batcher a
+	// chance to misbehave.
 	time.Sleep(1500 * time.Millisecond)
 	if n := rec.bodyCount(); n != 0 {
 		t.Fatalf("expected zero OTLP exports with tracing disabled, got %d", n)

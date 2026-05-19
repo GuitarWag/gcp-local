@@ -8,6 +8,38 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-05-19
+
+### Changed
+
+- **OTLP exporter honours `OTEL_EXPORTER_OTLP_PROTOCOL`.** The trace
+  exporter introduced in 0.7.0 hardcoded HTTP/protobuf and silently
+  ignored the standard protocol env var. It now selects between
+  `http/protobuf` (default) and `grpc`, reading
+  `OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` first and falling back to
+  `OTEL_EXPORTER_OTLP_PROTOCOL`. Any other value is rejected at
+  start-up rather than being silently downgraded.
+- **`otelhttp` bumped to v0.63.0** so the contrib HTTP and gRPC
+  instrumentation modules sit on the same minor version, avoiding the
+  TracerProvider lookup skew the 2-minor gap could introduce.
+
+### Fixed
+
+- **Tracer-provider init ordering.** `observability.Init` now installs
+  the global text-map propagators only after the OTLP exporter and
+  resource have been built successfully. The previous order left W3C
+  propagators globally installed even when the exporter failed to start,
+  which would have leaked partial state into any caller that kept the
+  process alive on error.
+
+### Notes
+
+- Span names are still `METHOD PATH` and include resource ids embedded
+  in GCP-style URLs (e.g. `GET /v1/projects/{p}/topics/{t}`). That keeps
+  the dev experience simple but inflates service-map cardinality if you
+  point the emulator at a long-lived trace backend. Path templating is
+  tracked as a follow-up rather than a fix.
+
 ## [0.7.0] - 2026-05-18
 
 ### Added
@@ -389,7 +421,8 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.7.1
 [0.7.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.7.0
 [0.6.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.6.0
 [0.5.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.5.1

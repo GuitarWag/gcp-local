@@ -16,10 +16,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -33,26 +35,41 @@ import (
 type ShutdownFunc func(context.Context) error
 
 // Init configures the global tracer provider and propagator. If
-// OTEL_EXPORTER_OTLP_ENDPOINT is empty, Init installs a no-op provider
-// and returns a no-op shutdown.
+// OTEL_EXPORTER_OTLP_ENDPOINT (or the traces-specific variant) is empty,
+// Init leaves the default no-op tracer provider in place, installs the
+// W3C tracecontext + baggage propagators, and returns a no-op shutdown.
+// The propagators are installed even on the disabled path so that any
+// downstream code that sets its own tracer provider can still honour
+// incoming traceparent headers.
+//
+// When the endpoint is set, the OTLP exporter protocol follows the
+// standard OTEL_EXPORTER_OTLP_PROTOCOL / OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+// env vars. Supported values: "http/protobuf" (default) and "grpc".
 //
 // serviceName is the default value for the service.name resource
 // attribute; OTEL_SERVICE_NAME takes precedence when set.
 func Init(ctx context.Context, serviceName, version string) (ShutdownFunc, error) {
-	// W3C propagators are installed unconditionally so the emulator can
-	// still parent into incoming traceparent headers if a downstream
-	// process happens to set the global provider itself.
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
-		propagation.TraceContext{},
-		propagation.Baggage{},
-	))
+	noop := func(context.Context) error { return nil }
+
+	installPropagators := func() {
+		otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+			propagation.TraceContext{},
+			propagation.Baggage{},
+		))
+	}
 
 	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") == "" &&
 		os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") == "" {
-		return func(context.Context) error { return nil }, nil
+		installPropagators()
+		return noop, nil
 	}
 
-	exp, err := otlptrace.New(ctx, otlptracehttp.NewClient())
+	client, err := otlpTraceClient()
+	if err != nil {
+		return nil, err
+	}
+
+	exp, err := otlptrace.New(ctx, client)
 	if err != nil {
 		return nil, fmt.Errorf("otlp trace exporter: %w", err)
 	}
@@ -66,6 +83,7 @@ func Init(ctx context.Context, serviceName, version string) (ShutdownFunc, error
 		),
 	)
 	if err != nil {
+		_ = exp.Shutdown(ctx)
 		return nil, fmt.Errorf("otel resource: %w", err)
 	}
 
@@ -74,6 +92,22 @@ func Init(ctx context.Context, serviceName, version string) (ShutdownFunc, error
 		sdktrace.WithResource(res),
 	)
 	otel.SetTracerProvider(tp)
+	installPropagators()
 
 	return tp.Shutdown, nil
+}
+
+func otlpTraceClient() (otlptrace.Client, error) {
+	proto := os.Getenv("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL")
+	if proto == "" {
+		proto = os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL")
+	}
+	switch strings.ToLower(strings.TrimSpace(proto)) {
+	case "", "http/protobuf", "http":
+		return otlptracehttp.NewClient(), nil
+	case "grpc":
+		return otlptracegrpc.NewClient(), nil
+	default:
+		return nil, fmt.Errorf("unsupported OTEL_EXPORTER_OTLP_PROTOCOL %q (want \"http/protobuf\" or \"grpc\")", proto)
+	}
 }
