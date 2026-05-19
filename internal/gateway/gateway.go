@@ -25,9 +25,11 @@ import (
 	"github.com/GuitarWag/gcp-local/internal/services/cloudrun"
 	"github.com/GuitarWag/gcp-local/internal/services/cloudsql"
 	"github.com/GuitarWag/gcp-local/internal/services/firestore"
+	"github.com/GuitarWag/gcp-local/internal/services/iamcredentials"
 	"github.com/GuitarWag/gcp-local/internal/services/kms"
 	"github.com/GuitarWag/gcp-local/internal/services/logging"
 	"github.com/GuitarWag/gcp-local/internal/services/memorystore"
+	"github.com/GuitarWag/gcp-local/internal/services/metadata"
 	"github.com/GuitarWag/gcp-local/internal/services/monitoring"
 	"github.com/GuitarWag/gcp-local/internal/services/pubsub"
 	"github.com/GuitarWag/gcp-local/internal/services/scheduler"
@@ -68,6 +70,8 @@ type Gateway struct {
 	csql    *cloudsql.Service
 	run     *cloudrun.Service
 	funcs   *cloudrun.Service
+	meta    *metadata.Service
+	iamc    *iamcredentials.Service
 	grpc    *grpc.Server
 }
 
@@ -236,6 +240,22 @@ func New(cfg *config.Config, build BuildInfo) (*Gateway, error) {
 		g.funcs = svc
 		g.health.Set(svc.Name(), health.StatusReady)
 	}
+	if cfg.Services.Metadata.Enabled {
+		svc, err := metadata.New(store, cfg)
+		if err != nil {
+			return nil, fmt.Errorf("init metadata: %w", err)
+		}
+		g.meta = svc
+		svc.Register(g.mux)
+		g.health.Set(svc.Name(), health.StatusReady)
+
+		iam, err := iamcredentials.New(store, cfg, svc)
+		if err != nil {
+			return nil, fmt.Errorf("init iamcredentials: %w", err)
+		}
+		g.iamc = iam
+		g.health.Set(iam.Name(), health.StatusReady)
+	}
 
 	if cfg.Dashboard {
 		copts := console.Options{
@@ -371,6 +391,9 @@ func (g *Gateway) dispatchV1(w http.ResponseWriter, r *http.Request) {
 	}
 	if g.kms != nil {
 		handlers = append(handlers, g.kms.HandleV1)
+	}
+	if g.iamc != nil {
+		handlers = append(handlers, g.iamc.HandleV1)
 	}
 	for _, h := range handlers {
 		if h(w, r, parts) {

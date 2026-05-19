@@ -8,6 +8,27 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-05-19
+
+### Added
+
+- **Metadata server + iamcredentials for ADC.** A new metadata service
+  responds at `/computeMetadata/v1/...` with GCE-shaped endpoints for
+  the default service account (`token`, `email`, `scopes`, `identity`,
+  `aliases`) and the project (`project-id`, `numeric-project-id`).
+  Pointing an SDK at the emulator with `GCE_METADATA_HOST=localhost:4443`
+  is now enough for `google.DefaultTokenSource`-style ADC paths to
+  resolve a token without a credentials file, matching how a process
+  picks up an attached service account on GCE/Cloud Run. The companion
+  `iamcredentials.googleapis.com` `generateAccessToken` /
+  `generateIdToken` endpoints are wired into the same key material, so
+  impersonation tests get a real RS256-signed JWT carrying the
+  requested `audience` claim. The signing key is generated in-memory at
+  start-up and published at `/computeMetadata/v1/jwks` for callers that
+  want to verify signatures. Requests without the `Metadata-Flavor:
+  Google` header are rejected with 403 so SDK probes that depend on
+  that handshake see the right shape. Closes #29.
+
 ## [0.7.1] - 2026-05-19
 
 ### Changed
@@ -421,7 +442,8 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.8.0
 [0.7.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.7.1
 [0.7.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.7.0
 [0.6.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.6.0

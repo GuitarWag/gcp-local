@@ -42,6 +42,11 @@ type ServicesConfig struct {
 	CloudSQL      CloudSQL      `yaml:"cloudsql"`
 	CloudRun      CloudRun      `yaml:"cloudrun"`
 	Functions     Functions     `yaml:"functions"`
+	Metadata      Metadata      `yaml:"metadata"`
+}
+
+type Metadata struct {
+	Enabled bool `yaml:"enabled"`
 }
 
 type SecretManager struct {
@@ -166,6 +171,7 @@ func Default() *Config {
 			CloudSQL:      CloudSQL{Enabled: true, BasePort: 5432},
 			CloudRun:      CloudRun{Enabled: true},
 			Functions:     Functions{Enabled: true},
+			Metadata:      Metadata{Enabled: true},
 		},
 	}
 }
