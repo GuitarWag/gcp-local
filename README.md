@@ -290,6 +290,8 @@ services:
 | Cloud Run        | working (subset)  | REST CRUD + invoke. Either proxies to `backendUrl` or spawns the configured `command` on first invoke (PORT + K_SERVICE env, cached child handle, terminated on resource delete / shutdown). No container image support. |
 | Cloud Functions  | working (subset)  | Same shape as Cloud Run.                           |
 | CloudSQL         | working (subset)  | REST instance admin + real Postgres wire protocol (`sqlite` engine). Per-instance TCP listener, SQL: schema, CRUD, `$N` params, `RETURNING`. pgembedded opt-in not yet implemented. |
+| Metadata server  | working           | `/computeMetadata/v1/...` shaped like GCE/Cloud Run's metadata service. `instance/service-accounts/default/{token,email,scopes,identity}`, `project/{project-id,numeric-project-id}`. Identity endpoint returns an RS256-signed JWT carrying the requested `audience`. |
+| IAM credentials  | working           | `iamcredentials.googleapis.com` `generateAccessToken` and `generateIdToken` for service-account impersonation. Shares signing key with metadata server. |
 | Bigtable         | stub              | gRPC connection succeeds; data methods return `UNIMPLEMENTED`. |
 | Spanner          | stub              | `CreateSession` works; data methods return `UNIMPLEMENTED`. |
 | Dataflow         | not implemented   |                                                     |
@@ -313,6 +315,28 @@ export GOOGLE_APPLICATION_CREDENTIALS=~/.gcp-local/fake-creds.json
 A fake service account JSON is written to `~/.gcp-local/fake-creds.json` on
 first start; it satisfies SDK auth checks without contacting Google's token
 endpoint.
+
+If you'd rather use Application Default Credentials (ADC) instead of a creds
+file, point the SDK's metadata client at the emulator and skip
+`GOOGLE_APPLICATION_CREDENTIALS` entirely:
+
+```bash
+export GCE_METADATA_HOST=localhost:4443
+unset GOOGLE_APPLICATION_CREDENTIALS
+```
+
+`google.DefaultTokenSource`, `google.auth.default()`, and the equivalent
+Node and JVM helpers all hit `/computeMetadata/v1/...` once that env var is
+set, so they pick up an emulator-issued token without any code changes. The
+identity endpoint
+(`/computeMetadata/v1/instance/service-accounts/default/identity?audience=...`)
+returns an RS256-signed JWT carrying the requested audience claim, signed
+with an in-memory key published at `/computeMetadata/v1/jwks`.
+
+Service-account impersonation that goes through `iamcredentials.googleapis.com`
+(`generateAccessToken` / `generateIdToken`) is mounted at
+`/v1/projects/-/serviceAccounts/{email}:{action}` and reuses the same signing
+key.
 
 ## Using with `gcloud`
 
