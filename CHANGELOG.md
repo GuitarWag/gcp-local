@@ -8,6 +8,25 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-05-21
+
+### Added
+
+- **CloudSQL MySQL engine.** Setting `engine: mysql` on a CloudSQL
+  instance now starts a real MySQL wire-protocol listener alongside the
+  existing Postgres shim, so apps using `go-sql-driver/mysql`,
+  `mysql-connector-python`, or `mysql2` can connect to the emulator
+  with their normal DSN and run CRUD + transactions. The wire layer is
+  provided by `go-mysql-org/go-mysql/server` and the storage is the
+  same in-memory sqlite handle the Postgres engine uses; a small
+  MySQL→SQLite dialect shim translates table options (`ENGINE=InnoDB`,
+  `DEFAULT CHARSET=utf8mb4`), `AUTO_INCREMENT`, `UNSIGNED`, type
+  aliases (`BIGINT`, `DATETIME`, `VARBINARY`, ...) and admin queries
+  (`SET NAMES`, `SELECT VERSION()`, `START TRANSACTION`, ...). Auth is
+  pinned to `mysql_native_password` for client compatibility. Postgres
+  and MySQL engines coexist in the same emulator process on separate
+  ports. Closes #27.
+
 ## [0.8.0] - 2026-05-19
 
 ### Added
@@ -437,12 +456,13 @@ First public release.
 - Bigtable + Spanner data paths return `UNIMPLEMENTED`.
 - Cloud Run + Cloud Functions do not spawn subprocesses; they only proxy
   to a pre-configured backend URL.
-- Dataflow, Vertex AI, AlloyDB, Cloud SQL MySQL: not implemented.
+- Dataflow, Vertex AI, AlloyDB: not implemented.
 - Routing is URL-prefix based, not Host-header based as the spec describes
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.9.0
 [0.8.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.8.0
 [0.7.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.7.1
 [0.7.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.7.0

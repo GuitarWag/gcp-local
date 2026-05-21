@@ -14,21 +14,30 @@ import (
 
 	"github.com/GuitarWag/gcp-local/internal/config"
 	"github.com/GuitarWag/gcp-local/internal/httpresp"
+	"github.com/GuitarWag/gcp-local/internal/services/cloudsql/mysqlwire"
 	"github.com/GuitarWag/gcp-local/internal/services/cloudsql/pgwire"
 	"github.com/GuitarWag/gcp-local/internal/state"
 
 	_ "modernc.org/sqlite" // sqlite driver registered as "sqlite" with database/sql
 )
 
-// CloudSQL accepts real Postgres-wire connections backed by an in-memory
-// sqlite database, one per instance. The admin REST surface tracks instance
-// metadata; the wire listener for each instance lives in pgwire and binds
-// either to an explicit port (config) or to an OS-assigned port (default).
+// CloudSQL accepts real Postgres-wire or MySQL-wire connections backed by an
+// in-memory sqlite database, one per instance. The admin REST surface tracks
+// instance metadata; the wire listener for each instance binds either to an
+// explicit port (config) or to an OS-assigned port (default).
 //
-// Only the `sqlite` engine is implemented here. The `postgres` engine
-// (pgembedded) is deferred to a follow-up.
+// Engines:
+//   - `sqlite` (default), `postgres`: Postgres wire shim in `pgwire`.
+//   - `mysql`: MySQL wire shim in `mysqlwire`, also sqlite-backed.
 
 const nsInstances = "cloudsql/instances"
+
+// instanceListener is the slice of the per-engine listener API the service
+// actually needs: stop on shutdown. Both pgwire.Listener and
+// mysqlwire.Listener implement it.
+type instanceListener interface {
+	Stop() error
+}
 
 type instance struct {
 	Name            string    `json:"name"`
@@ -50,7 +59,7 @@ type Service struct {
 	basePort int
 
 	mu        sync.Mutex
-	listeners map[string]*pgwire.Listener
+	listeners map[string]instanceListener
 }
 
 func New(store state.Store, cfg *config.Config) (*Service, error) {
@@ -58,7 +67,7 @@ func New(store state.Store, cfg *config.Config) (*Service, error) {
 		store:     store,
 		project:   cfg.Project,
 		basePort:  cfg.Services.CloudSQL.BasePort,
-		listeners: map[string]*pgwire.Listener{},
+		listeners: map[string]instanceListener{},
 	}
 	for i, inst := range cfg.Services.CloudSQL.Instances {
 		port := inst.Port
@@ -72,7 +81,7 @@ func New(store state.Store, cfg *config.Config) (*Service, error) {
 		body := instance{
 			Name:            inst.Name,
 			Project:         cfg.Project,
-			DatabaseVersion: "POSTGRES_15",
+			DatabaseVersion: defaultDatabaseVersion(eng),
 			State:           "RUNNABLE",
 			CreateTime:      time.Now().UTC(),
 			Engine:          eng,
@@ -99,7 +108,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 func (s *Service) Stop(_ context.Context) {
 	s.mu.Lock()
 	listeners := s.listeners
-	s.listeners = map[string]*pgwire.Listener{}
+	s.listeners = map[string]instanceListener{}
 	s.mu.Unlock()
 	for _, l := range listeners {
 		_ = l.Stop()
@@ -136,11 +145,11 @@ func (s *Service) collection(w http.ResponseWriter, r *http.Request, project str
 			return
 		}
 		body.Project = project
-		if body.DatabaseVersion == "" {
-			body.DatabaseVersion = "POSTGRES_15"
-		}
 		if body.Engine == "" {
 			body.Engine = "sqlite"
+		}
+		if body.DatabaseVersion == "" {
+			body.DatabaseVersion = defaultDatabaseVersion(body.Engine)
 		}
 		body.State = "RUNNABLE"
 		body.CreateTime = time.Now().UTC()
@@ -200,11 +209,15 @@ func (s *Service) item(w http.ResponseWriter, r *http.Request, project, name str
 }
 
 // startInstance opens the sqlite DB for the instance, runs optional seed
-// SQL, then starts the pg wire listener. On success body.Port is updated
-// to the actual bound port (relevant when the requested port was 0).
+// SQL, then starts the wire listener that matches body.Engine. On success
+// body.Port is updated to the actual bound port (relevant when the
+// requested port was 0).
 func (s *Service) startInstance(body *instance, seedPath string) error {
-	if body.Engine != "" && body.Engine != "sqlite" {
-		return fmt.Errorf("engine %q not supported (only sqlite for now)", body.Engine)
+	switch body.Engine {
+	case "", "sqlite", "postgres", "mysql":
+		// supported
+	default:
+		return fmt.Errorf("engine %q not supported", body.Engine)
 	}
 	dsn := fmt.Sprintf("file:cloudsql_%s_%s?mode=memory&cache=shared", body.Project, body.Name)
 	db, err := sql.Open("sqlite", dsn)
@@ -230,8 +243,7 @@ func (s *Service) startInstance(body *instance, seedPath string) error {
 		}
 	}
 	addr := fmt.Sprintf("127.0.0.1:%d", body.Port)
-	ln := pgwire.NewListener(body.Name, body.Database, addr, db)
-	bound, err := ln.Start()
+	ln, bound, err := startListener(body.Engine, body.Name, body.Database, addr, db)
 	if err != nil {
 		_ = db.Close()
 		return err
@@ -242,6 +254,34 @@ func (s *Service) startInstance(body *instance, seedPath string) error {
 	s.listeners[keyFor(body.Project, body.Name)] = ln
 	s.mu.Unlock()
 	return nil
+}
+
+// startListener picks the wire shim that matches the engine and returns the
+// running listener along with its bound address.
+func startListener(engine, name, database, addr string, db *sql.DB) (instanceListener, string, error) {
+	switch engine {
+	case "mysql":
+		ln := mysqlwire.NewListener(name, database, addr, db)
+		bound, err := ln.Start()
+		if err != nil {
+			return nil, "", err
+		}
+		return ln, bound, nil
+	default:
+		ln := pgwire.NewListener(name, database, addr, db)
+		bound, err := ln.Start()
+		if err != nil {
+			return nil, "", err
+		}
+		return ln, bound, nil
+	}
+}
+
+func defaultDatabaseVersion(engine string) string {
+	if engine == "mysql" {
+		return "MYSQL_8_0"
+	}
+	return "POSTGRES_15"
 }
 
 func (s *Service) stopInstance(key string) {
