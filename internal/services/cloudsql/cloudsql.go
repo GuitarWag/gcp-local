@@ -27,12 +27,14 @@ import (
 // explicit port (config) or to an OS-assigned port (default).
 //
 // Engines:
-//   - `sqlite` (default), `postgres`: Postgres wire shim in `pgwire`.
+//   - `sqlite` (default): Postgres wire shim in `pgwire`.
 //   - `mysql`: MySQL wire shim in `mysqlwire`, also sqlite-backed.
+//
+// `postgres` (real pgembedded binary) is not implemented yet — see README.
 
 const nsInstances = "cloudsql/instances"
 
-// instanceListener is the slice of the per-engine listener API the service
+// instanceListener is the subset of the per-engine listener API the service
 // actually needs: stop on shutdown. Both pgwire.Listener and
 // mysqlwire.Listener implement it.
 type instanceListener interface {
@@ -214,7 +216,7 @@ func (s *Service) item(w http.ResponseWriter, r *http.Request, project, name str
 // requested port was 0).
 func (s *Service) startInstance(body *instance, seedPath string) error {
 	switch body.Engine {
-	case "", "sqlite", "postgres", "mysql":
+	case "", "sqlite", "mysql":
 		// supported
 	default:
 		return fmt.Errorf("engine %q not supported", body.Engine)

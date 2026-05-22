@@ -133,6 +133,32 @@ func TestCloudSQLMySQLWire(t *testing.T) {
 		t.Errorf("rollback ineffective, count = %d", count)
 	}
 
+	// Translation must skip string literals: a value containing `ENGINE=`
+	// should land in the row verbatim instead of being stripped.
+	if _, err := db.ExecContext(ctx, `CREATE TABLE logs (id INT PRIMARY KEY, msg VARCHAR(200))`); err != nil {
+		t.Fatalf("create logs: %v", err)
+	}
+	const literal = "ENGINE=InnoDB failed: BIGINT overflow"
+	if _, err := db.ExecContext(ctx, `INSERT INTO logs (id, msg) VALUES (?, ?)`, 1, literal); err != nil {
+		t.Fatalf("insert literal: %v", err)
+	}
+	var roundTrip string
+	if err := db.QueryRowContext(ctx, `SELECT msg FROM logs WHERE id = ?`, 1).Scan(&roundTrip); err != nil {
+		t.Fatalf("select literal: %v", err)
+	}
+	if roundTrip != literal {
+		t.Errorf("literal round-trip mismatch: got %q want %q", roundTrip, literal)
+	}
+
+	// And SQL comments: a `-- BIGINT ...` comment in the middle of a CREATE
+	// must not have its `BIGINT` rewritten — sqlite happily ignores it.
+	if _, err := db.ExecContext(ctx, "CREATE TABLE notes (\n  id INT PRIMARY KEY,\n  -- BIGINT not yet supported here\n  body /* keep BIGINT untouched */ TEXT\n)"); err != nil {
+		t.Fatalf("create notes with comments: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO notes (id, body) VALUES (?, ?)`, 1, "hello"); err != nil {
+		t.Fatalf("insert into notes: %v", err)
+	}
+
 	// Verify the postgres and mysql engines coexist in the same emulator.
 	resp2, body2 := doJSON(t, http.MethodPost, base, map[string]any{
 		"name":     "pg-coexist",
@@ -141,5 +167,16 @@ func TestCloudSQLMySQLWire(t *testing.T) {
 	})
 	if resp2.StatusCode != http.StatusOK {
 		t.Fatalf("create coexisting postgres-engine instance: %d %s", resp2.StatusCode, body2)
+	}
+
+	// The `postgres` engine is documented as unimplemented and must be
+	// rejected — silently routing it through pgwire would mislead callers.
+	resp3, body3 := doJSON(t, http.MethodPost, base, map[string]any{
+		"name":     "pg-real",
+		"engine":   "postgres",
+		"database": "pgdb",
+	})
+	if resp3.StatusCode == http.StatusOK {
+		t.Fatalf("postgres engine should be rejected, got 200 %s", body3)
 	}
 }

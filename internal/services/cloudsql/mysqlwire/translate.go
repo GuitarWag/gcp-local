@@ -1,7 +1,6 @@
 package mysqlwire
 
 import (
-	"regexp"
 	"strings"
 	"unicode"
 )
@@ -10,48 +9,102 @@ import (
 // run. The transformations are deliberately small and target the basic
 // surface (CREATE TABLE / INSERT / SELECT / UPDATE / DELETE plus
 // transactions). Anything more exotic is the caller's problem.
+//
+// All rewrites happen in one pass that skips over single-quoted strings,
+// double-quoted strings, backtick identifiers, `-- line` comments, and
+// `/* block */` comments, so contents like `'ENGINE=InnoDB failed'` or
+// `-- BIGINT is fine` are never mangled.
 func translateSQL(in string) string {
-	out := in
-	out = stripTableSuffix(out)
-	out = stripUnsigned(out)
-	out = replaceAutoIncrement(out)
-	out = replaceTypes(out)
-	return out
+	out := make([]byte, 0, len(in))
+	i := 0
+	for i < len(in) {
+		c := in[i]
+		switch {
+		case c == '\'':
+			j := skipSingleQuoted(in, i)
+			out = append(out, in[i:j]...)
+			i = j
+			continue
+		case c == '"':
+			j := skipDoubleQuoted(in, i)
+			out = append(out, in[i:j]...)
+			i = j
+			continue
+		case c == '`':
+			j := skipBackquoted(in, i)
+			out = append(out, in[i:j]...)
+			i = j
+			continue
+		case c == '-' && i+1 < len(in) && in[i+1] == '-':
+			j := skipLineComment(in, i)
+			out = append(out, in[i:j]...)
+			i = j
+			continue
+		case c == '/' && i+1 < len(in) && in[i+1] == '*':
+			j := skipBlockComment(in, i)
+			out = append(out, in[i:j]...)
+			i = j
+			continue
+		}
+		if !isWordStart(in, i) {
+			out = append(out, c)
+			i++
+			continue
+		}
+		j := i
+		for j < len(in) && isIdentByte(in[j]) {
+			j++
+		}
+		word := in[i:j]
+		up := strings.ToUpper(word)
+
+		// Modifiers sqlite doesn't recognise on column types.
+		switch up {
+		case "UNSIGNED", "ZEROFILL":
+			if j < len(in) && (in[j] == ' ' || in[j] == '\t') {
+				j++
+			}
+			i = j
+			continue
+		case "AUTO_INCREMENT":
+			out = append(out, "AUTOINCREMENT"...)
+			i = j
+			continue
+		}
+
+		// Type keywords that map onto sqlite-flavoured types.
+		if r, ok := typeReplacements[up]; ok {
+			out = append(out, r...)
+			// Eat an optional `(N)` or `(N,M)` size hint after numeric
+			// types so sqlite doesn't reject e.g. `INT(11)`.
+			if j < len(in) && in[j] == '(' && isNumericLen(in, j) {
+				if end := strings.IndexByte(in[j:], ')'); end >= 0 {
+					j += end + 1
+				}
+			}
+			i = j
+			continue
+		}
+
+		// Table options that follow a CREATE TABLE ... ( ... ) closing paren,
+		// like `ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin`.
+		if k := matchTableOption(in, i, up); k > 0 {
+			// Drop whitespace already emitted ahead of the option so the
+			// rewrite doesn't leave a stranded space behind.
+			for len(out) > 0 && (out[len(out)-1] == ' ' || out[len(out)-1] == '\t') {
+				out = out[:len(out)-1]
+			}
+			i = k
+			continue
+		}
+
+		out = append(out, word...)
+		i = j
+	}
+	return string(out)
 }
 
-// stripTableSuffix removes MySQL-specific table options that follow a
-// CREATE TABLE ... ( ... ) closing paren, like
-//
-//	ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
-//
-// SQLite raises a syntax error on any of these.
-var tableOptRe = regexp.MustCompile(`(?i)\s+(ENGINE|DEFAULT\s+CHARSET|CHARSET|COLLATE|AUTO_INCREMENT|ROW_FORMAT|COMMENT)\s*=\s*([A-Za-z0-9_]+|'[^']*')`)
-
-func stripTableSuffix(in string) string {
-	return tableOptRe.ReplaceAllString(in, "")
-}
-
-// stripUnsigned removes `UNSIGNED` and similar type modifiers sqlite doesn't
-// recognise as part of column type declarations.
-var modifierRe = regexp.MustCompile(`(?i)\b(UNSIGNED|ZEROFILL)\b`)
-
-func stripUnsigned(in string) string {
-	return modifierRe.ReplaceAllString(in, "")
-}
-
-// replaceAutoIncrement turns the MySQL keyword into SQLite's AUTOINCREMENT
-// (which is only valid on INTEGER PRIMARY KEY columns — that's fine for
-// the basic-CRUD acceptance tests). Outside `PRIMARY KEY` context we just
-// drop it.
-var (
-	pkAutoIncRe = regexp.MustCompile(`(?i)\bAUTO_INCREMENT\b`)
-)
-
-func replaceAutoIncrement(in string) string {
-	return pkAutoIncRe.ReplaceAllString(in, "AUTOINCREMENT")
-}
-
-// replaceTypes maps MySQL-only column types onto sqlite-flavoured types.
+// typeReplacements maps MySQL-only column types onto sqlite-flavoured types.
 // SQLite is dynamic about column types but the parser still needs to
 // recognise the keyword.
 var typeReplacements = map[string]string{
@@ -76,54 +129,58 @@ var typeReplacements = map[string]string{
 	"BINARY":     "BLOB",
 }
 
-func replaceTypes(in string) string {
-	var b strings.Builder
-	b.Grow(len(in))
-	i := 0
-	for i < len(in) {
-		c := in[i]
-		switch c {
-		case '\'':
-			j := skipSingleQuoted(in, i)
-			b.WriteString(in[i:j])
-			i = j
-		case '"':
-			j := skipDoubleQuoted(in, i)
-			b.WriteString(in[i:j])
-			i = j
-		case '`':
-			j := skipBackquoted(in, i)
-			b.WriteString(in[i:j])
-			i = j
-		default:
-			if isWordStart(in, i) {
-				j := i
-				for j < len(in) && isIdentByte(in[j]) {
-					j++
-				}
-				word := in[i:j]
-				up := strings.ToUpper(word)
-				if r, ok := typeReplacements[up]; ok {
-					b.WriteString(r)
-				} else {
-					b.WriteString(word)
-				}
-				// Eat an optional `(N)` or `(N,M)` size hint after numeric
-				// types so sqlite doesn't reject e.g. `INT(11)`.
-				if j < len(in) && in[j] == '(' && isNumericLen(in, j) {
-					end := strings.IndexByte(in[j:], ')')
-					if end >= 0 {
-						j += end + 1
-					}
-				}
-				i = j
-				continue
-			}
-			b.WriteByte(c)
-			i++
+// matchTableOption returns the position just past a `KEYWORD = VALUE` table
+// option starting at `start` (where `up` is the already-uppercased keyword
+// at that position), or 0 if the word doesn't introduce one. Recognised
+// keywords (case-insensitive): ENGINE, CHARSET, COLLATE, AUTO_INCREMENT,
+// ROW_FORMAT, COMMENT, plus the two-word form `DEFAULT CHARSET`.
+func matchTableOption(in string, start int, up string) int {
+	var afterKey int
+	switch up {
+	case "ENGINE", "CHARSET", "COLLATE", "AUTO_INCREMENT", "ROW_FORMAT", "COMMENT":
+		afterKey = start + len(up)
+	case "DEFAULT":
+		j := start + len("DEFAULT")
+		for j < len(in) && (in[j] == ' ' || in[j] == '\t') {
+			j++
 		}
+		const charset = "CHARSET"
+		if j+len(charset) > len(in) || !strings.EqualFold(in[j:j+len(charset)], charset) {
+			return 0
+		}
+		k := j + len(charset)
+		if k < len(in) && isIdentByte(in[k]) {
+			return 0
+		}
+		afterKey = k
+	default:
+		return 0
 	}
-	return b.String()
+	j := afterKey
+	for j < len(in) && (in[j] == ' ' || in[j] == '\t') {
+		j++
+	}
+	if j >= len(in) || in[j] != '=' {
+		return 0
+	}
+	j++
+	for j < len(in) && (in[j] == ' ' || in[j] == '\t') {
+		j++
+	}
+	if j >= len(in) {
+		return 0
+	}
+	if in[j] == '\'' {
+		return skipSingleQuoted(in, j)
+	}
+	if !isIdentByte(in[j]) {
+		return 0
+	}
+	k := j
+	for k < len(in) && isIdentByte(in[k]) {
+		k++
+	}
+	return k
 }
 
 func isNumericLen(in string, j int) bool {
@@ -182,6 +239,25 @@ func skipBackquoted(s string, i int) int {
 	return len(s)
 }
 
+func skipLineComment(s string, i int) int {
+	j := i + 2
+	for j < len(s) && s[j] != '\n' {
+		j++
+	}
+	return j
+}
+
+func skipBlockComment(s string, i int) int {
+	j := i + 2
+	for j+1 < len(s) {
+		if s[j] == '*' && s[j+1] == '/' {
+			return j + 2
+		}
+		j++
+	}
+	return len(s)
+}
+
 func isIdentByte(c byte) bool {
 	return c == '_' || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
@@ -198,19 +274,23 @@ func isWordStart(s string, i int) bool {
 }
 
 // countParams returns the number of `?` placeholders in s, ignoring those
-// inside quoted strings or identifiers.
+// inside quoted strings, identifiers, or comments.
 func countParams(s string) int {
 	n := 0
 	i := 0
 	for i < len(s) {
-		switch s[i] {
-		case '\'':
+		switch {
+		case s[i] == '\'':
 			i = skipSingleQuoted(s, i)
-		case '"':
+		case s[i] == '"':
 			i = skipDoubleQuoted(s, i)
-		case '`':
+		case s[i] == '`':
 			i = skipBackquoted(s, i)
-		case '?':
+		case s[i] == '-' && i+1 < len(s) && s[i+1] == '-':
+			i = skipLineComment(s, i)
+		case s[i] == '/' && i+1 < len(s) && s[i+1] == '*':
+			i = skipBlockComment(s, i)
+		case s[i] == '?':
 			n++
 			i++
 		default:
