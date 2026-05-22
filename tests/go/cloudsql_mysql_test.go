@@ -159,6 +159,16 @@ func TestCloudSQLMySQLWire(t *testing.T) {
 		t.Fatalf("insert into notes: %v", err)
 	}
 
+	// `AUTO_INCREMENT=N` is a table-option (start value). It must be
+	// stripped — leaving it as `AUTOINCREMENT=100` would be a sqlite parse
+	// error. Real-world mysqldump output emits this on every table.
+	if _, err := db.ExecContext(ctx, `CREATE TABLE counters (id INT PRIMARY KEY, label VARCHAR(50)) ENGINE=InnoDB AUTO_INCREMENT=100`); err != nil {
+		t.Fatalf("create counters with AUTO_INCREMENT table option: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO counters (id, label) VALUES (?, ?)`, 100, "first"); err != nil {
+		t.Fatalf("insert into counters: %v", err)
+	}
+
 	// Verify the postgres and mysql engines coexist in the same emulator.
 	resp2, body2 := doJSON(t, http.MethodPost, base, map[string]any{
 		"name":     "pg-coexist",

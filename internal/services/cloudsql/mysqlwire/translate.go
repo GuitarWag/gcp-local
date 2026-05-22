@@ -67,6 +67,17 @@ func translateSQL(in string) string {
 			i = j
 			continue
 		case "AUTO_INCREMENT":
+			// `AUTO_INCREMENT=N` is a table option (start value) and
+			// must be stripped — leaving it as `AUTOINCREMENT=N` would
+			// be a sqlite parse error. The column-modifier form (no
+			// trailing `=`) still rewrites to AUTOINCREMENT.
+			if k := matchTableOption(in, i, up); k > 0 {
+				for len(out) > 0 && (out[len(out)-1] == ' ' || out[len(out)-1] == '\t') {
+					out = out[:len(out)-1]
+				}
+				i = k
+				continue
+			}
 			out = append(out, "AUTOINCREMENT"...)
 			i = j
 			continue
