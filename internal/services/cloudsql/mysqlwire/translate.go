@@ -14,8 +14,26 @@ import (
 // double-quoted strings, backtick identifiers, `-- line` comments, and
 // `/* block */` comments, so contents like `'ENGINE=InnoDB failed'` or
 // `-- BIGINT is fine` are never mangled.
+//
+// Column-level `AUTO_INCREMENT` is reordered to land after `PRIMARY KEY` in
+// the same column definition, because sqlite only accepts the keyword as
+// `INTEGER PRIMARY KEY AUTOINCREMENT`. If the column has no inline
+// PRIMARY KEY (mysqldump style, with a separate constraint), the keyword
+// is dropped — sqlite's rowid will auto-increment INTEGER PRIMARY KEY
+// columns regardless, so CREATE TABLE still succeeds.
 func translateSQL(in string) string {
 	out := make([]byte, 0, len(in))
+	// Per-column state: AUTO_INCREMENT and PRIMARY KEY each appear at a
+	// specific paren depth (typically 1, inside CREATE TABLE's column
+	// block). State resets when we leave that depth via `,` or `)`, so
+	// inner parens (`DECIMAL(10,2)`, `DEFAULT now()`) don't interfere.
+	parenDepth := 0
+	var (
+		autoIncPending  bool
+		autoIncDepth    int
+		primaryKeySeen  bool
+		primaryKeyDepth int
+	)
 	i := 0
 	for i < len(in) {
 		c := in[i]
@@ -46,6 +64,32 @@ func translateSQL(in string) string {
 			i = j
 			continue
 		}
+
+		// Paren and column-boundary tracking. Update before emitting so
+		// pending AUTO_INCREMENT that wasn't paired with PRIMARY KEY gets
+		// dropped (with its leading whitespace) before the punctuation.
+		switch c {
+		case '(':
+			parenDepth++
+		case ')':
+			if autoIncPending && parenDepth == autoIncDepth {
+				out = trimTrailingHSpace(out)
+				autoIncPending = false
+			}
+			if primaryKeySeen && parenDepth == primaryKeyDepth {
+				primaryKeySeen = false
+			}
+			parenDepth--
+		case ',':
+			if autoIncPending && parenDepth == autoIncDepth {
+				out = trimTrailingHSpace(out)
+				autoIncPending = false
+			}
+			if primaryKeySeen && parenDepth == primaryKeyDepth {
+				primaryKeySeen = false
+			}
+		}
+
 		if !isWordStart(in, i) {
 			out = append(out, c)
 			i++
@@ -69,18 +113,52 @@ func translateSQL(in string) string {
 		case "AUTO_INCREMENT":
 			// `AUTO_INCREMENT=N` is a table option (start value) and
 			// must be stripped — leaving it as `AUTOINCREMENT=N` would
-			// be a sqlite parse error. The column-modifier form (no
-			// trailing `=`) still rewrites to AUTOINCREMENT.
+			// be a sqlite parse error.
 			if k := matchTableOption(in, i, up); k > 0 {
-				for len(out) > 0 && (out[len(out)-1] == ' ' || out[len(out)-1] == '\t') {
-					out = out[:len(out)-1]
-				}
+				out = trimTrailingHSpace(out)
 				i = k
 				continue
 			}
-			out = append(out, "AUTOINCREMENT"...)
+			// Column-modifier form. SQLite requires `INTEGER PRIMARY KEY
+			// AUTOINCREMENT`, so emit here only if PRIMARY KEY has
+			// already been printed for this column; otherwise defer and
+			// let the PRIMARY KEY branch emit AUTOINCREMENT after itself.
+			if primaryKeySeen && parenDepth == primaryKeyDepth {
+				out = append(out, "AUTOINCREMENT"...)
+				i = j
+				continue
+			}
+			autoIncPending = true
+			autoIncDepth = parenDepth
+			// Eat trailing whitespace so dropping the keyword doesn't
+			// leave a double space behind.
+			for j < len(in) && (in[j] == ' ' || in[j] == '\t') {
+				j++
+			}
 			i = j
 			continue
+		case "PRIMARY":
+			// Match the two-word "PRIMARY KEY" sequence so we can emit
+			// any pending AUTOINCREMENT immediately after.
+			k := j
+			for k < len(in) && (in[k] == ' ' || in[k] == '\t') {
+				k++
+			}
+			const keyKw = "KEY"
+			if k+len(keyKw) <= len(in) && strings.EqualFold(in[k:k+len(keyKw)], keyKw) &&
+				(k+len(keyKw) == len(in) || !isIdentByte(in[k+len(keyKw)])) {
+				out = append(out, "PRIMARY KEY"...)
+				primaryKeySeen = true
+				primaryKeyDepth = parenDepth
+				i = k + len(keyKw)
+				if autoIncPending && parenDepth == autoIncDepth {
+					out = append(out, " AUTOINCREMENT"...)
+					autoIncPending = false
+				}
+				continue
+			}
+			// PRIMARY not followed by KEY — fall through and emit as a
+			// regular word.
 		}
 
 		// Type keywords that map onto sqlite-flavoured types.
@@ -102,9 +180,7 @@ func translateSQL(in string) string {
 		if k := matchTableOption(in, i, up); k > 0 {
 			// Drop whitespace already emitted ahead of the option so the
 			// rewrite doesn't leave a stranded space behind.
-			for len(out) > 0 && (out[len(out)-1] == ' ' || out[len(out)-1] == '\t') {
-				out = out[:len(out)-1]
-			}
+			out = trimTrailingHSpace(out)
 			i = k
 			continue
 		}
@@ -113,6 +189,15 @@ func translateSQL(in string) string {
 		i = j
 	}
 	return string(out)
+}
+
+// trimTrailingHSpace strips trailing horizontal whitespace from out so a
+// dropped keyword doesn't leave a stranded space (or run of spaces) behind.
+func trimTrailingHSpace(out []byte) []byte {
+	for len(out) > 0 && (out[len(out)-1] == ' ' || out[len(out)-1] == '\t') {
+		out = out[:len(out)-1]
+	}
+	return out
 }
 
 // typeReplacements maps MySQL-only column types onto sqlite-flavoured types.

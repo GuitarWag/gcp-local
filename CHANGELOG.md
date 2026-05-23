@@ -20,12 +20,15 @@ Until 1.0.0, breaking changes may land in minor releases.
   provided by `go-mysql-org/go-mysql/server` and the storage is the
   same in-memory sqlite handle the Postgres engine uses; a small
   MySQL→SQLite dialect shim translates table options (`ENGINE=InnoDB`,
-  `DEFAULT CHARSET=utf8mb4`), `AUTO_INCREMENT`, `UNSIGNED`, type
+  `DEFAULT CHARSET=utf8mb4`, `AUTO_INCREMENT=N`), `UNSIGNED`, type
   aliases (`BIGINT`, `DATETIME`, `VARBINARY`, ...) and admin queries
-  (`SET NAMES`, `SELECT VERSION()`, `START TRANSACTION`, ...). The
-  dialect shim runs as a single quote- and comment-aware pass so that
-  string literals like `'ENGINE=InnoDB failed'` and `-- BIGINT ...`
-  comments survive translation unchanged. Auth is pinned to
+  (`SET NAMES`, `SELECT VERSION()`, `START TRANSACTION`, ...).
+  Column-level `AUTO_INCREMENT` is reordered to land after `PRIMARY KEY`
+  in the same column definition so `id INT AUTO_INCREMENT PRIMARY KEY`
+  becomes SQLite's `INTEGER PRIMARY KEY AUTOINCREMENT`. The dialect
+  shim runs as a single quote- and comment-aware pass so that string
+  literals like `'ENGINE=InnoDB failed'` and `-- BIGINT ...` comments
+  survive translation unchanged. Auth is pinned to
   `mysql_native_password` for client compatibility. Postgres and MySQL
   engines coexist in the same emulator process on separate ports;
   `engine: postgres` is still rejected and reserved for a future real

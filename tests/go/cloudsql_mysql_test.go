@@ -169,6 +169,49 @@ func TestCloudSQLMySQLWire(t *testing.T) {
 		t.Fatalf("insert into counters: %v", err)
 	}
 
+	// Inline `INT AUTO_INCREMENT PRIMARY KEY` is the canonical MySQL idiom
+	// for an auto-incrementing primary key. SQLite needs the equivalent
+	// `INTEGER PRIMARY KEY AUTOINCREMENT`; the translator must reorder.
+	// Verify by inserting without specifying id and seeing it assigned.
+	if _, err := db.ExecContext(ctx, `CREATE TABLE seq_inline (id INT AUTO_INCREMENT PRIMARY KEY, label VARCHAR(50))`); err != nil {
+		t.Fatalf("create seq_inline: %v", err)
+	}
+	res, insertErr := db.ExecContext(ctx, `INSERT INTO seq_inline (label) VALUES (?)`, "alpha")
+	if insertErr != nil {
+		t.Fatalf("insert seq_inline alpha: %v", insertErr)
+	}
+	firstID, lidErr := res.LastInsertId()
+	if lidErr != nil || firstID == 0 {
+		t.Fatalf("seq_inline LastInsertId: id=%d err=%v", firstID, lidErr)
+	}
+
+	// The reverse word order `PRIMARY KEY AUTO_INCREMENT` must also work.
+	if _, err := db.ExecContext(ctx, `CREATE TABLE seq_reverse (id INT PRIMARY KEY AUTO_INCREMENT, label VARCHAR(50))`); err != nil {
+		t.Fatalf("create seq_reverse: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO seq_reverse (label) VALUES (?)`, "beta"); err != nil {
+		t.Fatalf("insert seq_reverse: %v", err)
+	}
+
+	// mysqldump style: AUTO_INCREMENT on a column with PRIMARY KEY as a
+	// separate constraint. SQLite can't auto-increment without inline PK,
+	// but the table must at least be creatable; the translator drops the
+	// orphan AUTO_INCREMENT so the CREATE doesn't error out.
+	if _, err := db.ExecContext(ctx, `CREATE TABLE dump_style (id INT NOT NULL AUTO_INCREMENT, label VARCHAR(50), PRIMARY KEY (id)) ENGINE=InnoDB`); err != nil {
+		t.Fatalf("create dump_style: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO dump_style (id, label) VALUES (?, ?)`, 1, "gamma"); err != nil {
+		t.Fatalf("insert dump_style: %v", err)
+	}
+
+	// Inner parens (DECIMAL precision) must not reset the per-column
+	// state — `id INT AUTO_INCREMENT` followed by another column with a
+	// parenthesised type, then PRIMARY KEY on a third column, must not
+	// confuse the depth tracking.
+	if _, err := db.ExecContext(ctx, `CREATE TABLE seq_with_decimal (id INT AUTO_INCREMENT PRIMARY KEY, amount DECIMAL(10,2), label VARCHAR(50))`); err != nil {
+		t.Fatalf("create seq_with_decimal: %v", err)
+	}
+
 	// Verify the postgres and mysql engines coexist in the same emulator.
 	resp2, body2 := doJSON(t, http.MethodPost, base, map[string]any{
 		"name":     "pg-coexist",
