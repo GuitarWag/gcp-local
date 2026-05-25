@@ -289,7 +289,7 @@ services:
 | Memorystore      | working           | miniredis on its own port. Disabled by default.    |
 | Cloud Run        | working (subset)  | REST CRUD + invoke. Either proxies to `backendUrl` or spawns the configured `command` on first invoke (PORT + K_SERVICE env, cached child handle, terminated on resource delete / shutdown). No container image support. |
 | Cloud Functions  | working (subset)  | Same shape as Cloud Run.                           |
-| CloudSQL         | working (subset)  | REST instance admin + real Postgres wire protocol (`sqlite` engine). Per-instance TCP listener, SQL: schema, CRUD, `$N` params, `RETURNING`. pgembedded opt-in not yet implemented. |
+| CloudSQL         | working (subset)  | REST instance admin + real Postgres or MySQL wire protocol. Engines: `sqlite` (default, Postgres-wire), `mysql` (MySQL-wire). Both backed by in-memory sqlite. Per-instance TCP listener, schema + CRUD + transactions. pgembedded opt-in not yet implemented. |
 | Metadata server  | working           | `/computeMetadata/v1/...` shaped like GCE/Cloud Run's metadata service. `instance/service-accounts/default/{token,email,scopes,identity}`, `project/{project-id,numeric-project-id}`. Identity endpoint returns an RS256-signed JWT carrying the requested `audience`. |
 | IAM credentials  | working           | `iamcredentials.googleapis.com` `generateAccessToken` and `generateIdToken` for service-account impersonation. Shares signing key with metadata server. |
 | Bigtable         | stub              | gRPC connection succeeds; data methods return `UNIMPLEMENTED`. |
@@ -453,14 +453,15 @@ matches it with these explicit gaps:
   emulator use).
 - BigQuery uses pure-Go SQLite, not DuckDB. SQL surface is a subset.
 - CloudSQL ships the default `sqlite` engine behind a Postgres wire shim
-  (pgproto3 + modernc.org/sqlite). The `postgres` engine (real pgembedded
-  binary) is not implemented yet, and MySQL is not implemented at all.
+  (pgproto3 + modernc.org/sqlite) and a `mysql` engine behind a MySQL wire
+  shim (go-mysql-org/go-mysql + the same sqlite handle). The `postgres`
+  engine (real pgembedded binary) is not implemented yet.
 - Bigtable and Spanner are gRPC stubs that return `UNIMPLEMENTED` for data
   operations.
 - Cloud Run / Cloud Functions can spawn a local executable (`command:` on the
   resource) or proxy to an existing `backendUrl`. There is no container image
   support — bring your own binary.
-- Dataflow, Vertex AI, AlloyDB, Cloud SQL MySQL — not implemented.
+- Dataflow, Vertex AI, AlloyDB — not implemented.
 - Default state backend is `memory`, not `boltdb`.
 
 ## Related projects
