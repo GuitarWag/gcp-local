@@ -212,6 +212,18 @@ func TestCloudSQLMySQLWire(t *testing.T) {
 		t.Fatalf("create seq_with_decimal: %v", err)
 	}
 
+	// BIGINT is rewritten to INTEGER by typeReplacements; the AUTO_INCREMENT
+	// reorder has to play nicely with the type rewrite for the canonical
+	// `BIGINT AUTO_INCREMENT PRIMARY KEY` to land as `INTEGER PRIMARY KEY
+	// AUTOINCREMENT`. Without that, the dominant MySQL idiom for large
+	// primary keys would fail.
+	if _, err := db.ExecContext(ctx, `CREATE TABLE seq_big (id BIGINT AUTO_INCREMENT PRIMARY KEY, label VARCHAR(50))`); err != nil {
+		t.Fatalf("create seq_big: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO seq_big (label) VALUES (?)`, "delta"); err != nil {
+		t.Fatalf("insert seq_big: %v", err)
+	}
+
 	// Verify the postgres and mysql engines coexist in the same emulator.
 	resp2, body2 := doJSON(t, http.MethodPost, base, map[string]any{
 		"name":     "pg-coexist",

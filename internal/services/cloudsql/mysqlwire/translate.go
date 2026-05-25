@@ -157,15 +157,25 @@ func translateSQL(in string) string {
 				}
 				continue
 			}
-			// PRIMARY not followed by KEY — fall through and emit as a
-			// regular word.
+			// PRIMARY not followed by KEY — emit as a regular word.
+			// Doing this explicitly (rather than falling through to the
+			// typeReplacements/matchTableOption checks below) keeps the
+			// behaviour stable if PRIMARY is ever added to one of those
+			// maps for an unrelated reason.
+			out = append(out, word...)
+			i = j
+			continue
 		}
 
 		// Type keywords that map onto sqlite-flavoured types.
 		if r, ok := typeReplacements[up]; ok {
 			out = append(out, r...)
 			// Eat an optional `(N)` or `(N,M)` size hint after numeric
-			// types so sqlite doesn't reject e.g. `INT(11)`.
+			// types so sqlite doesn't reject e.g. `INT(11)`. The skipped
+			// parens balance out, so parenDepth stays correct even though
+			// the main loop never visits them; if that ever stops being
+			// true (e.g. unmatched parens inside the hint), the depth
+			// tracking will need explicit fix-up here.
 			if j < len(in) && in[j] == '(' && isNumericLen(in, j) {
 				if end := strings.IndexByte(in[j:], ')'); end >= 0 {
 					j += end + 1
