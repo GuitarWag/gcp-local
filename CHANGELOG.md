@@ -8,6 +8,35 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-05-29
+
+### Added
+
+- **Resource-level IAM policies + service-account admin.** Every
+  service whose real-GCP surface exposes
+  `:getIamPolicy` / `:setIamPolicy` / `:testIamPermissions` colon-verbs
+  now round-trips them through a shared `internal/iam` store: Pub/Sub
+  topics and subscriptions, Secret Manager secrets, KMS key rings and
+  crypto keys, Cloud Tasks queues, Cloud Run services, Cloud Functions,
+  and service accounts. The Cloud Storage JSON API also gets its
+  GCS-shaped equivalents (`GET/PUT /storage/v1/b/{bucket}/iam` and
+  `GET /storage/v1/b/{bucket}/iam/testPermissions`), so
+  `bucket.IAM().Policy(ctx)` / `SetPolicy` / `TestPermissions` from the
+  Go `cloud.google.com/go/storage` client round-trip end-to-end.
+  Policies live in a new `iam/policies` state namespace keyed by full
+  resource name, persist across restarts when the BoltDB backend is on,
+  and reset via `POST /admin/reset` alongside the per-service
+  namespaces. Etags are derived from the canonicalised binding set so
+  read-after-write returns a stable value; `testIamPermissions` echoes
+  the requested permissions back (no enforcement). The
+  `iam.googleapis.com` admin surface ships under a new `iamadmin`
+  service: `projects.serviceAccounts` create/get/list/patch/delete plus
+  `serviceAccounts.keys` create/get/list/delete returning a fake
+  base64-encoded credentials JSON. Account deletion cascades to keys.
+  Dispatch is centralised in the gateway: `dispatchV1`/`dispatchV2`
+  intercept IAM colon-verbs before passing to per-service handlers, so
+  services only need to expose CRUD and stay unchanged. Closes #28.
+
 ## [0.9.0] - 2026-05-21
 
 ### Added
@@ -468,7 +497,8 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.10.0
 [0.9.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.9.0
 [0.8.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.8.0
 [0.7.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.7.1

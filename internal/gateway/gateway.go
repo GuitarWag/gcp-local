@@ -20,11 +20,13 @@ import (
 	"github.com/GuitarWag/gcp-local/internal/dashboard"
 	"github.com/GuitarWag/gcp-local/internal/dashboard/console"
 	"github.com/GuitarWag/gcp-local/internal/health"
+	"github.com/GuitarWag/gcp-local/internal/iam"
 	"github.com/GuitarWag/gcp-local/internal/services/bigquery"
 	"github.com/GuitarWag/gcp-local/internal/services/bigtable"
 	"github.com/GuitarWag/gcp-local/internal/services/cloudrun"
 	"github.com/GuitarWag/gcp-local/internal/services/cloudsql"
 	"github.com/GuitarWag/gcp-local/internal/services/firestore"
+	"github.com/GuitarWag/gcp-local/internal/services/iamadmin"
 	"github.com/GuitarWag/gcp-local/internal/services/iamcredentials"
 	"github.com/GuitarWag/gcp-local/internal/services/kms"
 	"github.com/GuitarWag/gcp-local/internal/services/logging"
@@ -72,6 +74,8 @@ type Gateway struct {
 	funcs   *cloudrun.Service
 	meta    *metadata.Service
 	iamc    *iamcredentials.Service
+	iam     *iam.Store
+	iamSA   *iamadmin.Service
 	grpc    *grpc.Server
 }
 
@@ -89,8 +93,11 @@ func New(cfg *config.Config, build BuildInfo) (*Gateway, error) {
 		mux:    http.NewServeMux(),
 		health: health.New(),
 		build:  build,
+		iam:    iam.NewStore(store),
 		grpc:   grpc.NewServer(grpc.StatsHandler(otelgrpc.NewServerHandler())),
 	}
+	g.iamSA = iamadmin.New(store, cfg)
+	g.health.Set(g.iamSA.Name(), health.StatusReady)
 
 	g.mux.HandleFunc("/healthz", g.health.Handler())
 	g.mux.HandleFunc("/admin/reset", g.handleReset)
@@ -102,7 +109,7 @@ func New(cfg *config.Config, build BuildInfo) (*Gateway, error) {
 	g.mux.HandleFunc("/v3/projects/", g.dispatchV3)
 
 	if cfg.Services.Storage.Enabled {
-		svc, err := storage.New(store, cfg)
+		svc, err := storage.New(store, cfg, g.iam)
 		if err != nil {
 			return nil, fmt.Errorf("init storage: %w", err)
 		}
@@ -357,6 +364,9 @@ func (g *Gateway) handleReset(w http.ResponseWriter, r *http.Request) {
 		"scheduler/jobs",
 		"kms/keyrings",
 		"kms/cryptokeys",
+		iam.Namespace,
+		iamadmin.NamespaceAccounts,
+		iamadmin.NamespaceKeys,
 	} {
 		all, err := g.store.List(ns, "")
 		if err != nil {
@@ -379,7 +389,17 @@ func (g *Gateway) dispatchV1(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	// IAM colon-verbs (:getIamPolicy / :setIamPolicy / :testIamPermissions)
+	// are mounted on every resource type in real GCP. Centralising the
+	// dispatch here keeps per-service code clean — they just expose
+	// CRUD and let the gateway handle IAM round-tripping.
+	if g.handleIAMVerb(w, r, parts) {
+		return
+	}
 	handlers := []v1Handler{}
+	if g.iamSA != nil {
+		handlers = append(handlers, g.iamSA.HandleV1)
+	}
 	if g.pubsub != nil {
 		handlers = append(handlers, g.pubsub.HandleV1)
 	}
@@ -409,6 +429,9 @@ func (g *Gateway) dispatchV2(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if g.handleIAMVerb(w, r, parts) {
+		return
+	}
 	if g.tasks != nil && g.tasks.HandleV2(w, r, parts) {
 		return
 	}
@@ -419,6 +442,30 @@ func (g *Gateway) dispatchV2(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.NotFound(w, r)
+}
+
+// handleIAMVerb routes ":getIamPolicy", ":setIamPolicy",
+// ":testIamPermissions" requests against any resource whose path is
+// already shaped as projects/.../<type>/<name>. Returns true when an
+// IAM verb was detected and handled.
+func (g *Gateway) handleIAMVerb(w http.ResponseWriter, r *http.Request, parts []string) bool {
+	if len(parts) < 4 {
+		return false
+	}
+	last := parts[len(parts)-1]
+	idx := strings.LastIndex(last, ":")
+	if idx < 0 {
+		return false
+	}
+	action := last[idx+1:]
+	if !iam.IsVerb(action) {
+		return false
+	}
+	name := last[:idx]
+	clone := append(parts[:0:0], parts...)
+	clone[len(clone)-1] = name
+	resource := strings.Join(clone, "/")
+	return g.iam.Handle(w, r, resource, action)
 }
 
 func splitPath(path, prefix string) []string {
