@@ -17,6 +17,7 @@ import (
 
 	"github.com/GuitarWag/gcp-local/internal/config"
 	"github.com/GuitarWag/gcp-local/internal/httpresp"
+	"github.com/GuitarWag/gcp-local/internal/iam"
 	"github.com/GuitarWag/gcp-local/internal/state"
 )
 
@@ -36,10 +37,11 @@ const (
 type Service struct {
 	store   state.Store
 	project string
+	iam     *iam.Store
 }
 
-func New(store state.Store, cfg *config.Config) (*Service, error) {
-	s := &Service{store: store, project: cfg.Project}
+func New(store state.Store, cfg *config.Config, iamStore *iam.Store) (*Service, error) {
+	s := &Service{store: store, project: cfg.Project, iam: iamStore}
 	for _, b := range cfg.Services.Storage.Buckets {
 		if err := s.ensureBucket(b.Name); err != nil {
 			return nil, fmt.Errorf("seed bucket %s: %w", b.Name, err)
@@ -275,9 +277,21 @@ func (s *Service) handleBucketPath(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(suffix, "o/"):
 		object := strings.TrimPrefix(suffix, "o/")
 		s.handleObject(w, r, bucket, object)
+	case suffix == "iam":
+		s.iam.HandleGCSPolicy(w, r, bucketResourceName(bucket))
+	case suffix == "iam/testPermissions":
+		s.iam.HandleGCSTestPermissions(w, r)
 	default:
 		s.writeErr(w, http.StatusNotFound, "not found")
 	}
+}
+
+// bucketResourceName is the canonical IAM resource name for a GCS
+// bucket. Real GCP uses "projects/_/buckets/{bucket}" — the "_"
+// placeholder is the GCS convention because buckets are global, not
+// project-scoped, even though they belong to a project.
+func bucketResourceName(bucket string) string {
+	return "projects/_/buckets/" + bucket
 }
 
 func (s *Service) bucketOp(w http.ResponseWriter, r *http.Request, bucket string) {

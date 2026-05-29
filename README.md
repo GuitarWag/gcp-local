@@ -292,6 +292,8 @@ services:
 | CloudSQL         | working (subset)  | REST instance admin + real Postgres or MySQL wire protocol. Engines: `sqlite` (default, Postgres-wire), `mysql` (MySQL-wire). Both backed by in-memory sqlite. Per-instance TCP listener, schema + CRUD + transactions. pgembedded opt-in not yet implemented. |
 | Metadata server  | working           | `/computeMetadata/v1/...` shaped like GCE/Cloud Run's metadata service. `instance/service-accounts/default/{token,email,scopes,identity}`, `project/{project-id,numeric-project-id}`. Identity endpoint returns an RS256-signed JWT carrying the requested `audience`. |
 | IAM credentials  | working           | `iamcredentials.googleapis.com` `generateAccessToken` and `generateIdToken` for service-account impersonation. Shares signing key with metadata server. |
+| IAM policies     | working           | `:getIamPolicy` / `:setIamPolicy` / `:testIamPermissions` round-trip on Pub/Sub topics + subscriptions, Secret Manager secrets, KMS keyrings + keys, Cloud Tasks queues, Cloud Run services, Cloud Functions, and service accounts. GCS-shaped `GET/PUT /b/{bucket}/iam` for Cloud Storage buckets. No permission enforcement. |
+| IAM admin        | working (subset)  | `iam.googleapis.com` `projects.serviceAccounts` CRUD + `serviceAccounts.keys` create/list/delete with a fake base64 credentials JSON payload. |
 | Bigtable         | stub              | gRPC connection succeeds; data methods return `UNIMPLEMENTED`. |
 | Spanner          | stub              | `CreateSession` works; data methods return `UNIMPLEMENTED`. |
 | Dataflow         | not implemented   |                                                     |
