@@ -8,6 +8,18 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-11-25
+
+### Changed
+
+- **Software factory playbook.** Added `docs/factory.md`, the operating
+  manual for the autonomous development pipeline: issue labels
+  (`factory:ready` / `factory:claimed` / `factory:done` /
+  `factory:flagged`), roles (orchestrator, builder, reviewer, human
+  merge gate), the non-negotiable pre-push gate, and the backlog order
+  for upcoming service work. Process documentation only — no service
+  behaviour changes.
+
 ## [0.10.0] - 2026-05-29
 
 ### Added
@@ -497,7 +509,8 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.10.1
 [0.10.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.10.0
 [0.9.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.9.0
 [0.8.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.8.0
