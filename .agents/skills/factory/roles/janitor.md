@@ -9,14 +9,17 @@ ones. You never delete work that has a valid claim.
    `~/.factory/wt/` or `~/.t3/worktrees/`: if its branch is merged, or its
    issue is closed, or it belongs to no claimed issue, remove it with
    `git worktree remove <path>`. Do not touch your own worktree, or a
-   worktree whose folder name has a `.pid` file in `~/.factory/run/`.
-   Those belong to running jobs. If the worktree has uncommitted
+   worktree whose folder name has a `.pid` or `.herdr` file in
+   `~/.factory/run/`, or a worktree named `resident-*`. Those belong to
+   running agents. If the worktree has uncommitted
    changes, do not remove it. Report it in your summary.
 2. **Branches.** Delete remote branches whose PR is merged or closed
    (`git push origin --delete <branch>`). Never delete `main`.
 3. **herdr teams.** For each herdr agent named `f<issue>-boss` whose
    issue is not claimed in `stage:build` or `stage:fix`, close its tab
-   with `herdr tab close <tab_id>`.
+   with `herdr tab close <tab_id>`. Close no other tab. The orchestrator
+   manages the stage job tabs and the resident tabs, and you are a
+   resident.
 4. **Labels.**
    - An open issue with two `stage:*` labels: keep the later stage.
    - A closed issue with `stage:*` or `factory:claimed`: remove them and
