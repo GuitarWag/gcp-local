@@ -20,6 +20,8 @@ REVIEW_MODEL=${FACTORY_REVIEW_MODEL:-}
 BOSS=${FACTORY_BOSS:-opencode}
 WORKER=${FACTORY_WORKER:-pi}
 JOB_LEASE=${FACTORY_JOB_LEASE:-60}
+STALL_MIN=${FACTORY_STALL_MIN:-20}
+JOB_MAX_MIN=${FACTORY_JOB_MAX_MIN:-90}
 TEAM_LEASE=${FACTORY_TEAM_LEASE:-240}
 JANITOR_EVERY=${FACTORY_JANITOR_EVERY:-21600}
 SCOUT_EVERY=${FACTORY_SCOUT_EVERY:-86400}
@@ -46,7 +48,8 @@ pick_agent() {
 run_agent() {
   local agent=$1 prompt=$2 model=${3:-}
   case $agent in
-    pi) pi -p --no-session ${model:+--model "$model"} "$prompt" ;;
+    # json mode streams events, so the watchdog sees progress in the log.
+    pi) pi -p --mode json --no-session ${model:+--model "$model"} "$prompt" ;;
     opencode) opencode run --auto --archived ${model:+-m "$model"} "$prompt" ;;
     *) echo "unknown agent: $agent" >&2; return 2 ;;
   esac
@@ -59,6 +62,28 @@ running_jobs() {
     if kill -0 "$(cat "$f")" 2>/dev/null; then n=$((n + 1)); else rm -f "$f"; fi
   done
   echo "$n"
+}
+
+mtime() { stat -f %m "$1" 2>/dev/null || stat -c %Y "$1"; }
+
+# Stops agents that hang: a model request with no answer never times out.
+# The job wrapper then releases the claim and removes the worktree.
+watchdog() {
+  local f id wrapper logf now idle age
+  now=$(date +%s)
+  for f in "$HOME_F"/run/*.pid; do
+    [ -e "$f" ] || continue
+    id=$(basename "$f" .pid)
+    wrapper=$(cat "$f")
+    logf="$HOME_F/logs/$id.log"
+    [ -e "$logf" ] || continue
+    idle=$(((now - $(mtime "$logf")) / 60))
+    age=$(((now - $(mtime "$f")) / 60))
+    if [ "$idle" -ge "$STALL_MIN" ] || [ "$age" -ge "$JOB_MAX_MIN" ]; then
+      log "watchdog: stop $id (no log output for ${idle}m, running ${age}m)"
+      [ -n "$DRY" ] || pkill -TERM -P "$wrapper"
+    fi
+  done
 }
 
 role_running() { ls "$HOME_F"/run/"$1"-*.pid >/dev/null 2>&1; }
@@ -208,6 +233,7 @@ due() {
 tick() {
   [ -n "$DRY" ] || "$CLAIM" reap
   running_jobs >/dev/null
+  watchdog
   close_finished_teams
 
   local role issue
