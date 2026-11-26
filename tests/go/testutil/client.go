@@ -66,6 +66,12 @@ func StartArgsEnv(t *testing.T, extraEnv []string, extraArgs ...string) *Emulato
 
 	cmdArgs := append([]string{"start", "--port=" + strconv.Itoa(port), "--no-daemon"}, extraArgs...)
 	cmd := exec.CommandContext(ctx, binPath, cmdArgs...)
+	if dir := coverDir(); dir != "" {
+		extraEnv = append(extraEnv, "GOCOVERDIR="+dir)
+		// SIGKILL loses coverage data; interrupt lets the binary flush it.
+		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+		cmd.WaitDelay = 5 * time.Second
+	}
 	if len(extraEnv) > 0 {
 		cmd.Env = append(os.Environ(), extraEnv...)
 	}
@@ -93,6 +99,10 @@ func StartArgsEnv(t *testing.T, extraEnv []string, extraArgs ...string) *Emulato
 func (e *Emulator) Stop() {
 	if e.cancel != nil {
 		e.cancel()
+	}
+	if coverDir() != "" && e.cmd != nil {
+		_ = e.cmd.Wait()
+		return
 	}
 	if e.cmd != nil && e.cmd.Process != nil {
 		_ = e.cmd.Process.Kill()
@@ -140,6 +150,9 @@ func waitReadyScheme(host string, useTLS bool, timeout time.Duration) error {
 
 var cachedBinPath string
 
+// coverDir is set by scripts/ci/coverage.sh to collect binary coverage.
+func coverDir() string { return os.Getenv("GCP_LOCAL_COVERDIR") }
+
 // BinaryPath returns a path to a freshly built gcp-local binary, cached per test run.
 func BinaryPath(t *testing.T) string {
 	t.Helper()
@@ -151,7 +164,11 @@ func BinaryPath(t *testing.T) string {
 		t.Fatalf("mkdir temp: %v", err)
 	}
 	binPath := filepath.Join(tmpDir, "gcp-local")
-	cmd := exec.Command("go", "build", "-o", binPath, "./cmd/gcp-local")
+	args := []string{"build", "-o", binPath}
+	if coverDir() != "" {
+		args = append(args, "-cover", "-coverpkg=./...")
+	}
+	cmd := exec.Command("go", append(args, "./cmd/gcp-local")...)
 	cmd.Dir = repoRoot(t)
 	out, err := cmd.CombinedOutput()
 	if err != nil {

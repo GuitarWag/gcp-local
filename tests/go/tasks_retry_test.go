@@ -114,6 +114,7 @@ func TestCloudTasksRetryOn5xxThenSuccess(t *testing.T) {
 	}
 
 	// Give it a beat to confirm no extra calls slip in.
+	// ast-grep-ignore: no-bare-sleep-in-tests
 	time.Sleep(300 * time.Millisecond)
 
 	if got := atomic.LoadInt32(&hits); got != 2 {
@@ -176,12 +177,14 @@ func TestCloudTasksRetryExhaustion(t *testing.T) {
 
 	// Wait long enough for all attempts to finish. With 5 attempts the four
 	// backoffs sum to 100+200+400+800 = 1500ms; pad it generously.
+	// ast-grep-ignore: no-bare-sleep-in-tests
 	time.Sleep(3 * time.Second)
 	final := atomic.LoadInt32(&hits)
 	if final > 5 {
 		t.Fatalf("retries exceeded maxAttempts: got %d", final)
 	}
 	// Confirm no further calls arrive after we've passed the attempt window.
+	// ast-grep-ignore: no-bare-sleep-in-tests
 	time.Sleep(1 * time.Second)
 	if got := atomic.LoadInt32(&hits); got != final {
 		t.Fatalf("calls continued after exhaustion: %d -> %d", final, got)

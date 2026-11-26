@@ -131,6 +131,7 @@ func TestCloudSchedulerInvalidScheduleStillStored(t *testing.T) {
 		t.Fatalf("create with invalid schedule: %d", resp.StatusCode)
 	}
 
+	// ast-grep-ignore: no-bare-sleep-in-tests
 	time.Sleep(300 * time.Millisecond)
 	if got := atomic.LoadInt32(&hits); got != 0 {
 		t.Errorf("expected 0 fires for invalid schedule, got %d", got)

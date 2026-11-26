@@ -14,6 +14,9 @@ TICK=${FACTORY_TICK:-300}
 MAX_JOBS=${FACTORY_MAX_JOBS:-3}
 MAX_TEAMS=${FACTORY_MAX_TEAMS:-2}
 AGENTS=${FACTORY_AGENTS:-"pi opencode"}
+# A reviewer from another model family catches what the builders miss.
+REVIEW_AGENT=${FACTORY_REVIEW_AGENT:-}
+REVIEW_MODEL=${FACTORY_REVIEW_MODEL:-}
 BOSS=${FACTORY_BOSS:-opencode}
 WORKER=${FACTORY_WORKER:-pi}
 JOB_LEASE=${FACTORY_JOB_LEASE:-60}
@@ -39,10 +42,10 @@ pick_agent() {
 }
 
 run_agent() {
-  local agent=$1 prompt=$2
+  local agent=$1 prompt=$2 model=${3:-}
   case $agent in
-    pi) pi -p --no-session "$prompt" ;;
-    opencode) opencode run --auto --archived "$prompt" ;;
+    pi) pi -p --no-session ${model:+--model "$model"} "$prompt" ;;
+    opencode) opencode run --auto --archived ${model:+-m "$model"} "$prompt" ;;
     *) echo "unknown agent: $agent" >&2; return 2 ;;
   esac
 }
@@ -84,8 +87,12 @@ Do the role now from start to end without questions. No human will answer. Use s
 
 # Ephemeral job: own detached worktree on origin/main, removed on exit.
 spawn_job() {
-  local role=$1 issue=${2:-} agent id wt logf
+  local role=$1 issue=${2:-} agent id wt logf model=
   agent=$(pick_agent)
+  if [ "$role" = review ]; then
+    agent=${REVIEW_AGENT:-$agent}
+    model=$REVIEW_MODEL
+  fi
   id="$role-${issue:-x}-$agent-$(date +%s)"
   if [ -n "$DRY" ]; then log "dry-run: start $role ${issue:+#$issue }with $agent"; return; fi
   if [ -n "$issue" ]; then "$CLAIM" claim "$issue" "$id" "$JOB_LEASE" || return; fi
@@ -98,7 +105,7 @@ spawn_job() {
   }
   log "start $role ${issue:+#$issue }with $agent (log: $logf)"
   (
-    cd "$wt" && run_agent "$agent" "$(prompt_for "$role" "$issue" "$id" "$wt")" >"$logf" 2>&1
+    cd "$wt" && run_agent "$agent" "$(prompt_for "$role" "$issue" "$id" "$wt")" "$model" >"$logf" 2>&1
     log "end $role ${issue:+#$issue }exit=$?" >>"$logf"
     if [ -n "$issue" ] && "$CLAIM" holds "$issue" "$id"; then "$CLAIM" drop "$issue" "$id"; fi
     git -C "$ROOT" worktree remove --force "$wt"

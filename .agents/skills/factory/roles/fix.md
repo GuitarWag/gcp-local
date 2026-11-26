@@ -13,7 +13,8 @@ worktree is on the PR branch.
    Nits are optional. Fix a nit only when it is in a file that you
    already change.
 4. Every 30 minutes, run `claim.sh renew <issue> <agent-id> 240`.
-5. Run the full pre-push gate from `AGENTS.md`. Push.
+5. Run `scripts/ci/gate.sh --cover`. Fix the cause of each failure, and
+   never silence a check. Push.
 6. Post a PR comment that maps each finding number to its commit, or
    explains why the finding is wrong.
 7. Run `claim.sh advance <issue> stage:fix stage:review`.

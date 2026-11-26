@@ -10,15 +10,17 @@ Keep it that way.
 2. Count the earlier `<!-- factory:verdict changes` comments on the PR.
    This review is round N+1.
 3. Read the spec, the plan and the full diff (`gh pr diff`). Check the
-   PR out in your worktree (`gh pr checkout <pr>`) and run the pre-push
-   gate from `AGENTS.md`.
+   PR out in your worktree (`gh pr checkout <pr>`) and run
+   `scripts/ci/gate.sh --cover`.
 4. Check, in this order:
    - Correctness against the spec, and the wire shapes against the real
      discovery document or protos.
    - Tests use the real SDK clients and fail without the change.
    - `AGENTS.md` rules: files under ~500 lines, `state.Store` only, no
      CGo, no new dependency without an ADR, tests only in `tests/<lang>/`.
-   - A changelog fragment exists. The PR does not edit `CHANGELOG.md`.
+   - The "Slop" list in `AGENTS.md`. CI checks the mechanical rules;
+     you check what CI cannot: reuse of existing helpers, tests that
+     prove behaviour, and real error shapes.
    - CI status (`gh pr checks <pr>`).
 5. A blocking finding is a bug, a wire difference, a failed check or a
    broken rule. Everything else is a nit. Nits never block.

@@ -1,0 +1,39 @@
+version: "2"
+
+# Stricter rules that apply only to lines changed since origin/main.
+# Old code is not held to them. Run by scripts/ci/gate.sh and CI.
+run:
+  timeout: 5m
+  tests: true
+
+issues:
+  new-from-merge-base: origin/main
+
+linters:
+  default: none
+  enable:
+    - dupl
+    - funlen
+    - gocognit
+    - goconst
+    - godox
+    - nestif
+  settings:
+    dupl:
+      threshold: 120
+    funlen:
+      lines: 80
+      statements: 50
+    gocognit:
+      min-complexity: 25
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+    godox:
+      keywords: [TODO, FIXME, XXX, HACK]
+    nestif:
+      min-complexity: 5
+  exclusions:
+    rules:
+      - path: tests/
+        linters: [funlen, goconst, dupl]
