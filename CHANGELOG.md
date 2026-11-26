@@ -21,8 +21,8 @@ Until 1.0.0, breaking changes may land in minor releases.
   ([ADR 20261125-231025](docs/adr/20261125-231025-adopt-adrlog-cli-for-architecture-decision.md))
   documents the adoption itself. Factory builders now check accepted ADRs
   before diverging from them. Tooling is developer-local only — not a Go
-  dependency, not shipped in the binary. Closes #44 (docs scope), records
-  the adoption decision.
+  dependency, not shipped in the binary. Records the adoption decision; the
+  README architecture diagram (#44) remains future work.
 
 ## [0.10.1] - 2026-11-25
 
