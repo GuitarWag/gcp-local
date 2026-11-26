@@ -8,6 +8,46 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-11-26
+
+### Changed
+
+- **CI guardrails for autonomous agents.** CI now runs golangci-lint,
+  a stricter golangci-lint config for changed lines only (copied code,
+  long or complex functions, TODOs), ast-grep rules for repo-specific
+  mistakes, a policy check that the PR cannot edit (file size, changelog
+  fragments, ADR for new dependencies, tests for service changes, no new
+  `//nolint` or skipped tests, guardrails apart from code, diff size),
+  and a per-package coverage ratchet against `main`. Go tests run with
+  `-shuffle=on`. `scripts/ci/gate.sh` runs the same checks locally, and
+  `tests/go/apicoverage` reports which real API methods the emulator
+  serves.
+
+- **Autonomous agent factory.** Agent instructions moved from `CLAUDE.md`
+  to `AGENTS.md`, so pi, opencode, Codex and Claude Code read the same
+  file. A `factory` skill in `.agents/skills/` and the scripts in
+  `scripts/factory/` run the full issue lifecycle with no human gate:
+  spec, FizzBee model check, plan into sub-issues, herdr team build,
+  review, fix, merge and release, plus a janitor and a feature scout.
+  PRs now add a fragment to `changelog.d/` instead of editing
+  `CHANGELOG.md`; the release manager cuts the version.
+
+- **Holdout acceptance stage.** The factory adds `stage:accept` between
+  review and merge. The spec agent writes plain-English acceptance
+  scenarios into a private holdout repo that the build agents never get.
+  After review, an evaluator agent runs each scenario 3 times with the
+  real SDKs against the PR and passes the PR only when every P0 scenario
+  and 90% of all scenarios pass. Failures go back to the fix team as one
+  line for each scenario.
+
+### Fixed
+
+- **Shutdown no longer hangs on open gRPC streams.** `gcp-local stop`
+  and SIGINT waited with no limit for client streams such as Firestore
+  `Listen` or Pub/Sub `StreamingPull`. The gRPC server now drains for 3
+  seconds and then stops. The state store also closes when the HTTP
+  shutdown returns an error.
+
 ## [0.12.0] - 2026-11-26
 
 ### Added
@@ -601,7 +641,8 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.12.1...HEAD
+[0.12.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.12.1
 [0.12.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.12.0
 [0.11.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.11.0
 [0.10.3]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.10.3
