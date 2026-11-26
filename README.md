@@ -80,7 +80,7 @@ flowchart TD
         BIGQUERY["BigQuery"]
         MEMO["Memorystore (own port)"]
         BT["Bigtable (subset)"]
-        SP["Spanner (stub)"]
+        SP["Spanner (subset)"]
     end
 
     subgraph COMPUTE["Compute and tasking"]
@@ -111,8 +111,8 @@ flowchart TD
 ```
 
 Every box maps to a row in the [Services](#services) table and a package
-under `internal/services/`. Bigtable has a working data path and Spanner is a
-gRPC stub; Dataflow, Vertex AI, and AlloyDB are not implemented. Cloud Functions shares the Cloud
+under `internal/services/`. Bigtable and Spanner have working data paths;
+Dataflow, Vertex AI, and AlloyDB are not implemented. Cloud Functions shares the Cloud
 Run package, and IAM policies are served through the services'
 `:getIamPolicy` / `:setIamPolicy` verbs on top of a shared `internal/iam`
 store.
@@ -365,7 +365,7 @@ services:
 | IAM policies     | working           | `:getIamPolicy` / `:setIamPolicy` / `:testIamPermissions` round-trip on Pub/Sub topics + subscriptions, Secret Manager secrets, KMS keyrings + keys, Cloud Tasks queues, Cloud Run services, Cloud Functions, and service accounts. GCS-shaped `GET/PUT /b/{bucket}/iam` for Cloud Storage buckets. No permission enforcement. |
 | IAM admin        | working (subset)  | `iam.googleapis.com` `projects.serviceAccounts` CRUD + `serviceAccounts.keys` create/list/delete with a fake base64 credentials JSON payload. |
 | Bigtable         | working (subset)  | Data plane: `MutateRow`, `MutateRows`, `ReadRows` (chunk streaming, row keys/ranges, `RowsLimit`, reversed scans), `SampleRowKeys`, `CheckAndMutateRow`, and the row-filter tree (Chain, Interleave, Condition, regex/range/limit/label filters). Admin: `CreateTable`, `ListTables`, `GetTable`, `DeleteTable`, `ModifyColumnFamilies`, `DropRowRange`. `ReadModifyWriteRow` and query/change-stream RPCs return `UNIMPLEMENTED`. |
-| Spanner          | stub              | `CreateSession` works; data methods return `UNIMPLEMENTED`. |
+| Spanner          | working (subset)  | Databases via DatabaseAdmin (`CREATE/ALTER/DROP TABLE`), sessions, `ExecuteSql` (SELECT + DML), `Read` (point keys + ranges), `Commit` (all 5 mutation types), transactions (buffered DML/mutations, apply-or-discard on commit/rollback), streaming. Partitioned queries, interleaved tables, and indexes are not supported. |
 | Dataflow         | not implemented   |                                                     |
 | Vertex AI        | not implemented   |                                                     |
 | AlloyDB          | not implemented   |                                                     |
@@ -528,8 +528,11 @@ matches it with these explicit gaps:
   (pgproto3 + modernc.org/sqlite) and a `mysql` engine behind a MySQL wire
   shim (go-mysql-org/go-mysql + the same sqlite handle). The `postgres`
   engine (real pgembedded binary) is not implemented yet.
-- Bigtable is a working data path (see table above); Spanner is a gRPC stub
-  that returns `UNIMPLEMENTED` for data operations.
+- Bigtable is a working data path (see table above). Spanner has a data
+  path backed by per-database SQLite: DDL via DatabaseAdmin, sessions,
+  `ExecuteSql`, `Read`, and all five mutation types through `Commit`,
+  with per-transaction buffering (apply-or-discard). Partitioned queries,
+  interleaved tables, and secondary indexes are not supported.
 - Cloud Run / Cloud Functions can spawn a local executable (`command:` on the
   resource) or proxy to an existing `backendUrl`. There is no container image
   support — bring your own binary.

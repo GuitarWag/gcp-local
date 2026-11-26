@@ -48,7 +48,7 @@ func TestBigtableMethodsReturnUnimplemented(t *testing.T) {
 	}
 }
 
-func TestSpannerCreateSessionWorksOthersUnimplemented(t *testing.T) {
+func TestSpannerCreateSessionWorksUnknownSessionNotFound(t *testing.T) {
 	em := testutil.Start(t)
 	conn := dialGRPC(t, em)
 	c := spb.NewSpannerClient(conn)
@@ -63,8 +63,10 @@ func TestSpannerCreateSessionWorksOthersUnimplemented(t *testing.T) {
 		t.Error("empty session name")
 	}
 
-	_, err = c.ExecuteSql(ctx, &spb.ExecuteSqlRequest{Session: sess.GetName()})
-	if status.Code(err) != codes.Unimplemented {
-		t.Errorf("expected Unimplemented for ExecuteSql, got %v", err)
+	// Sessions are real records: an unknown session is NotFound, not
+	// UNIMPLEMENTED.
+	_, err = c.ExecuteSql(ctx, &spb.ExecuteSqlRequest{Session: sess.GetName() + "/sessions/unknown"})
+	if status.Code(err) != codes.NotFound {
+		t.Errorf("expected NotFound for unknown session, got %v", err)
 	}
 }

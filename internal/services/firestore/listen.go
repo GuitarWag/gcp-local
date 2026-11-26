@@ -92,6 +92,7 @@ func (f *firestoreServer) Listen(stream pb.Firestore_ListenServer) error {
 				// normal end-of-stream path.
 				return senderFailure
 			}
+
 			if errors.Is(err, errStreamEOF) || err.Error() == "EOF" {
 				return nil
 			}

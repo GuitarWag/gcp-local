@@ -100,6 +100,19 @@ linters:
         linters:
           - gosec
         text: "G201|G701"
+      # Spanner DDL/DML is translated to SQLite; table and column names are
+      # validated against a strict identifier regexp before interpolation.
+      - path: internal/services/spanner/
+        linters:
+          - gosec
+        text: "G201|G701"
+      # Spanner DDL/DML method names mirror the wire RPCs (ExecuteSql), and
+      # the deprecated longrunning import matches the generated admin pb.
+      - path: internal/services/spanner/
+        linters:
+          - revive
+          - staticcheck
+        text: "var-naming|SA1019"
       # Storage write paths return object bytes verbatim by spec (GCS proxies
       # arbitrary content). MD5 is used for GCS ETag/hash, not crypto.
       - path: internal/services/storage/

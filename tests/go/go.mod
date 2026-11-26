@@ -6,6 +6,7 @@ require (
 	cloud.google.com/go/bigtable v1.47.0
 	cloud.google.com/go/compute/metadata v0.9.0
 	cloud.google.com/go/firestore v1.21.0
+	cloud.google.com/go/iam v1.7.0
 	cloud.google.com/go/pubsub v1.50.1
 	cloud.google.com/go/spanner v1.91.0
 	cloud.google.com/go/storage v1.56.0
@@ -13,6 +14,7 @@ require (
 	github.com/jackc/pgx/v5 v5.9.2
 	google.golang.org/api v0.274.0
 	google.golang.org/grpc v1.80.0
+	google.golang.org/protobuf v1.36.11
 )
 
 require (
@@ -20,11 +22,11 @@ require (
 	cloud.google.com/go v0.123.0 // indirect
 	cloud.google.com/go/auth v0.18.2 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
-	cloud.google.com/go/iam v1.7.0 // indirect
 	cloud.google.com/go/longrunning v0.9.0 // indirect
 	cloud.google.com/go/monitoring v1.25.0 // indirect
 	cloud.google.com/go/pubsub/v2 v2.0.0 // indirect
 	filippo.io/edwards25519 v1.2.0 // indirect
+	github.com/GoogleCloudPlatform/grpc-gcp-go/grpcgcp v1.6.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.31.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.55.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.55.0 // indirect
@@ -64,5 +66,4 @@ require (
 	google.golang.org/genproto v0.0.0-20260319201613-d00831a3d3e7 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260401024825-9d38bb4040a9 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260401024825-9d38bb4040a9 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
 )
