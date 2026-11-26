@@ -217,7 +217,10 @@ func TestConsolePubSubAPI(t *testing.T) {
 		t.Fatalf("peek returned no messages")
 	}
 	// Second peek should return the same message — peek must not drain.
-	resp2, _ := http.Get(em.URL("/console/api/pubsub/peek?subscription=projects/local-project/subscriptions/console-s&limit=5"))
+	resp2, err := http.Get(em.URL("/console/api/pubsub/peek?subscription=projects/local-project/subscriptions/console-s&limit=5"))
+	if err != nil {
+		t.Fatalf("second peek: %v", err)
+	}
 	defer resp2.Body.Close()
 	var out2 struct {
 		Messages []map[string]any `json:"messages"`

@@ -364,6 +364,8 @@ func (g *Gateway) handleReset(w http.ResponseWriter, r *http.Request) {
 		"scheduler/jobs",
 		"kms/keyrings",
 		"kms/cryptokeys",
+		"bigtable/tables",
+		"bigtable/rows",
 		iam.Namespace,
 		iamadmin.NamespaceAccounts,
 		iamadmin.NamespaceKeys,

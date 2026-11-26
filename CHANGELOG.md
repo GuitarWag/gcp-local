@@ -8,6 +8,36 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-25
+
+### Added
+
+- **Bigtable data path.** The Bigtable emulator now implements the real
+  `google.bigtable.v2.Bigtable` data plane and the
+  `google.bigtable.admin.v2.BigtableTableAdmin` table lifecycle on top
+  of the shared state store, so `cloud.google.com/go/bigtable` (and any
+  wire-compatible client pointed at `BIGTABLE_EMULATOR_HOST`) works
+  against a persistent store instead of getting UNIMPLEMENTED for every
+  call. Implemented: `MutateRow`, `MutateRows` (per-entry statuses),
+  `ReadRows` (CellChunk streaming, `RowSet` row keys and row ranges,
+  `RowsLimit`), `SampleRowKeys`, `CheckAndMutateRow` (predicate filter
+  with true/false mutation branches), and the row-filter tree — Chain,
+  Interleave, Condition, family/qualifier/value regex, column/value
+  ranges, timestamp ranges, per-row and per-column cell limits,
+  strip-value, apply-label, row-sample, pass/block-all. Table admin
+  covers `CreateTable` (AlreadyExists on dupes), `ListTables`,
+  `GetTable`, `DeleteTable`, `ModifyColumnFamilies`
+  (create/drop/update, with family data purged on drop), and
+  `DropRowRange` (by prefix or full table). Mutations carry explicit or
+  server-assigned millisecond-granular timestamps; rows and table
+  metadata live in the `bigtable/tables` and `bigtable/rows` state
+  namespaces, persist across restarts with BoltDB, and reset via
+  `POST /admin/reset`. `ReadModifyWriteRow` and the query/
+  change-stream RPCs (`PrepareQuery`, `ExecuteQuery`,
+  `ReadChangeStream`) still return UNIMPLEMENTED. The
+  `tests/go/bigtable_test.go` integration suite drives all of it
+  through the real Go SDK. Closes #2.
+
 ## [0.10.3] - 2026-11-26
 
 ### Changed
@@ -545,7 +575,8 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.10.3...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.11.0
 [0.10.3]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.10.3
 [0.10.2]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.10.2
 [0.10.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.10.1

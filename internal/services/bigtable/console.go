@@ -1,14 +1,11 @@
 package bigtable
 
-// ConsoleStatus returns the stub status surfaced on the /console UI.
-// The Bigtable service intentionally returns UNIMPLEMENTED for data
-// ops — the page just shows that fact alongside the reachable gRPC
-// surface.
+// ConsoleStatus returns the service status surfaced on the /console UI.
 func (s *Service) ConsoleStatus() map[string]any {
 	return map[string]any{
 		"project": s.project,
-		"surface": "gRPC: google.bigtable.v2.Bigtable",
-		"state":   "stub",
-		"note":    "All data RPCs (ReadRows, MutateRow, …) return UNIMPLEMENTED. Connect to discover the surface; no data is stored.",
+		"surface": "gRPC: google.bigtable.v2.Bigtable + admin.v2 BigtableTableAdmin",
+		"state":   "ready",
+		"note":    "ReadRows, MutateRow(s), SampleRowKeys, CheckAndMutateRow and table admin are implemented. ReadModifyWriteRow and query/change-stream RPCs return UNIMPLEMENTED.",
 	}
 }
