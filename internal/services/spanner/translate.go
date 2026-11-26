@@ -1,7 +1,6 @@
 package spanner
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -221,7 +220,7 @@ func sqliteTypeFor(c ddlColumn) string {
 	case strings.HasPrefix(up, "FLOAT64"), strings.HasPrefix(up, "FLOAT32"):
 		return "REAL"
 	case strings.HasPrefix(up, "BOOL"):
-		return "INTEGER"
+		return "BOOLEAN" // NUMERIC affinity; name keeps the BOOL type code
 	default:
 		return "TEXT"
 	}
@@ -291,5 +290,3 @@ func classifySQL(sql string) string {
 		return "query"
 	}
 }
-
-var _ = fmt.Sprintf // keep fmt imported for future use in this file

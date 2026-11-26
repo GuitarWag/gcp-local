@@ -126,15 +126,17 @@ func (e *engine) checkTableExists(db *sql.DB, table string, wantMissing bool) er
 	return nil
 }
 
-// dropDatabase removes a database and its DDL log. Dropping an unknown
-// database is a no-op (DropDatabase is idempotent).
+// dropDatabase removes a database and its DDL log. An unknown database is
+// NotFound, matching the real service.
 func (e *engine) dropDatabase(database string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if db, ok := e.dbs[database]; ok {
-		_ = db.Close()
-		delete(e.dbs, database)
+	db, ok := e.dbs[database]
+	if !ok {
+		return errNotFound("Database not found: %s", database)
 	}
+	_ = db.Close()
+	delete(e.dbs, database)
 	delete(e.ddls, database)
 	return nil
 }

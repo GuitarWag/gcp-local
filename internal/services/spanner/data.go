@@ -13,31 +13,27 @@ import (
 	structpb "google.golang.org/protobuf/types/known/structpb"
 )
 
-// runSQL executes one statement (query, DML, or DDL) inside the session's
-// transaction context and builds a ResultSet.
-func (s *Service) runSQL(sess *sessionRecord, sqlStr string, params *structpb.Struct, paramTypes map[string]*sppb.Type) (*sppb.ResultSet, error) {
+// runSQL executes one statement (query, DML, or DDL) and builds a
+// ResultSet. A non-nil txn routes the statement through the transaction's
+// DML buffer; nil autocommits.
+func (s *Service) runSQL(sess *sessionRecord, sqlStr string, params *structpb.Struct, paramTypes map[string]*sppb.Type, txn *txnRecord) (*sppb.ResultSet, error) {
 	args, err := bindParams(params, paramTypes)
 	if err != nil {
 		return nil, err
 	}
-	return s.runSQLArgs(sess, sqlStr, args)
+	return s.runSQLArgs(sess, sqlStr, args, txn)
 }
 
-// runSQLArgs is the core executor. args are pre-converted sql.Named values.
-func (s *Service) runSQLArgs(sess *sessionRecord, sqlStr string, args []any) (*sppb.ResultSet, error) {
+// runSQLArgs is the core executor. args are pre-converted bind values.
+func (s *Service) runSQLArgs(sess *sessionRecord, sqlStr string, args []any, txn *txnRecord) (*sppb.ResultSet, error) {
 	if strings.TrimSpace(sqlStr) == "" {
 		return nil, errInvalidArgument("empty SQL statement")
 	}
 	kind := classifySQL(sqlStr)
-	db, err := s.engine.dbFor(sess.database)
-	if err != nil {
-		return nil, err
-	}
-	switch kind {
-	case "ddl":
-		stmt, perr := parseDDL(sqlStr)
-		if perr != nil {
-			return nil, perr
+	if kind == "ddl" {
+		stmt, err := parseDDL(sqlStr)
+		if err != nil {
+			return nil, err
 		}
 		if stmt.kind == ddlOther {
 			return nil, errInvalidArgument("unsupported DDL statement: %s", firstLine(sqlStr))
@@ -46,27 +42,39 @@ func (s *Service) runSQLArgs(sess *sessionRecord, sqlStr string, args []any) (*s
 			return nil, err
 		}
 		return &sppb.ResultSet{}, nil
-	case "dml":
-		q, err := translateQuery(sqlStr)
-		if err != nil {
-			return nil, err
-		}
-		res, err := execDML(db, q, args)
-		if err != nil {
-			return nil, sqlErrToGRPC(err)
-		}
-		return dmlResultSet(res), nil
-	default: // query
-		q, err := translateQuery(sqlStr)
-		if err != nil {
-			return nil, err
-		}
-		rows, meta, err := runQuery(db, q, args)
-		if err != nil {
-			return nil, sqlErrToGRPC(err)
-		}
-		return &sppb.ResultSet{Metadata: meta, Rows: rows}, nil
 	}
+	q, err := translateQuery(sqlStr)
+	if err != nil {
+		return nil, err
+	}
+	db, err := s.engine.dbFor(sess.database)
+	if err != nil {
+		return nil, err
+	}
+	if txn == nil || txn.pdml {
+		return runStmt(db, kind, q, args)
+	}
+	return s.runInTxn(db, txn, kind, q, args)
+}
+
+// runStmt runs a DML statement or a query on r.
+func runStmt(r sqlRunner, kind, q string, args []any) (*sppb.ResultSet, error) {
+	if kind == "dml" {
+		res, err := r.Exec(q, args...)
+		if err != nil {
+			return nil, sqlErrToGRPC(err)
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return nil, errInternal("rows affected: %v", err)
+		}
+		return dmlResultSet(n), nil
+	}
+	rows, meta, err := runQuery(r, q, args)
+	if err != nil {
+		return nil, sqlErrToGRPC(err)
+	}
+	return &sppb.ResultSet{Metadata: meta, Rows: rows}, nil
 }
 
 func firstLine(s string) string {
@@ -84,22 +92,13 @@ func bindParams(params *structpb.Struct, types map[string]*sppb.Type) ([]any, er
 	}
 	var args []any
 	for name, v := range params.GetFields() {
-		gv, err := sqliteValue(v, types[name])
+		gv, err := sqliteValue(v, types[name], "bind parameter "+name)
 		if err != nil {
 			return nil, err
 		}
 		args = append(args, sql.Named(name, gv))
 	}
 	return args, nil
-}
-
-// execDML runs INSERT/UPDATE/DELETE and reports the affected row count.
-func execDML(db *sql.DB, q string, args []any) (int64, error) {
-	res, err := db.Exec(q, args...)
-	if err != nil {
-		return 0, err
-	}
-	return res.RowsAffected()
 }
 
 // dmlResultSet builds a ResultSet carrying just the DML row count.
@@ -113,13 +112,8 @@ func dmlResultSet(count int64) *sppb.ResultSet {
 
 // runQuery executes a SELECT and returns protobuf rows plus metadata
 // describing the result column types.
-func runQuery(db *sql.DB, q string, args []any) ([]*structpb.ListValue, *sppb.ResultSetMetadata, error) {
-	stmt, err := db.Prepare(q)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer func() { _ = stmt.Close() }()
-	rows, err := stmt.Query(args...)
+func runQuery(r sqlRunner, q string, args []any) ([]*structpb.ListValue, *sppb.ResultSetMetadata, error) {
+	rows, err := r.Query(q, args...)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -164,15 +158,7 @@ func runQuery(db *sql.DB, q string, args []any) ([]*structpb.ListValue, *sppb.Re
 
 // typeFromSQLite maps a SQLite column type back to a Spanner type code.
 func typeFromSQLite(ct *sql.ColumnType) *sppb.Type {
-	name := strings.ToUpper(ct.DatabaseTypeName())
-	switch {
-	case strings.Contains(name, "INT"):
-		return &sppb.Type{Code: sppb.TypeCode_INT64}
-	case strings.Contains(name, "REAL"), strings.Contains(name, "FLOA"), strings.Contains(name, "DOUBLE"):
-		return &sppb.Type{Code: sppb.TypeCode_FLOAT64}
-	default:
-		return &sppb.Type{Code: sppb.TypeCode_STRING}
-	}
+	return &sppb.Type{Code: typeCodeFromDecl(ct.DatabaseTypeName())}
 }
 
 // sqlErrToGRPC maps SQLite errors onto Spanner gRPC codes.
@@ -214,27 +200,45 @@ func (s *Service) Read(ctx context.Context, req *sppb.ReadRequest) (*sppb.Result
 	if err != nil {
 		return nil, err
 	}
-	// Key sets constrain the table's primary key column, not the first
-	// requested column.
+	if !validIdent.MatchString(req.GetTable()) {
+		return nil, errInvalidArgument("invalid table name %q", req.GetTable())
+	}
 	db, err := s.engine.dbFor(sess.database)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.engine.checkTableExists(db, req.GetTable(), false); err != nil {
-		return nil, err
-	}
-	pkCols, err := primaryKeyColsDB(db, req.GetTable())
+	info, err := tableInfo(db, req.GetTable())
 	if err != nil {
 		return nil, err
 	}
-	if len(pkCols) == 0 {
+	if len(info.pk) == 0 {
 		return nil, errInvalidArgument("table %s has no primary key", req.GetTable())
 	}
-	q, named, err := readToSQL(req, pkCols[0])
+	q, args, err := readToSQL(req, info)
 	if err != nil {
 		return nil, err
 	}
-	return s.runSQLArgs(sess, q, named)
+	return s.execSelected(sess, req.GetTransaction(), q, args)
+}
+
+// execSelected runs a statement under a TransactionSelector and attaches
+// the transaction id when the selector began one inline.
+func (s *Service) execSelected(sess *sessionRecord, sel *sppb.TransactionSelector, q string, args []any) (*sppb.ResultSet, error) {
+	txn, begun, err := s.resolveTxn(sess, sel)
+	if err != nil {
+		return nil, err
+	}
+	rs, err := s.runSQLArgs(sess, q, args, txn)
+	if err != nil {
+		if begun {
+			s.dropTxn(txn.id)
+		}
+		return nil, err
+	}
+	if begun {
+		withTxnID(rs, txn)
+	}
+	return rs, nil
 }
 
 func (s *Service) StreamingRead(req *sppb.ReadRequest, stream sppb.Spanner_StreamingReadServer) error {
@@ -250,27 +254,11 @@ func (s *Service) ExecuteSql(ctx context.Context, req *sppb.ExecuteSqlRequest) (
 	if err != nil {
 		return nil, err
 	}
-	// Transaction selector: "Begin" starts a transaction that stays open
-	// until Commit/Rollback carries its id (the SDK's first statement in a
-	// ReadWriteTransaction uses this).
-	rs, err := s.runSQL(sess, req.GetSql(), req.GetParams(), req.GetParamTypes())
+	args, err := bindParams(req.GetParams(), req.GetParamTypes())
 	if err != nil {
 		return nil, err
 	}
-	if sel := req.GetTransaction(); sel != nil {
-		if sel.GetBegin() != nil {
-			tx, err := s.beginTxn(sess)
-			if err != nil {
-				return nil, err
-			}
-			sess.pendingTxn = tx.id
-			if rs.GetMetadata() == nil {
-				rs.Metadata = &sppb.ResultSetMetadata{}
-			}
-			rs.Metadata.Transaction = &sppb.Transaction{Id: tx.id}
-		}
-	}
-	return rs, nil
+	return s.execSelected(sess, req.GetTransaction(), req.GetSql(), args)
 }
 
 func (s *Service) ExecuteStreamingSql(req *sppb.ExecuteSqlRequest, stream sppb.Spanner_ExecuteStreamingSqlServer) error {
@@ -307,500 +295,29 @@ func streamResultSet(stream sppb.Spanner_ExecuteStreamingSqlServer, rs *sppb.Res
 	return nil
 }
 
-// readToSQL converts a ReadRequest (table, columns, key set) into
-// positional-parameter SQL ("?N" placeholders bound by index).
-func readToSQL(req *sppb.ReadRequest, pkCol string) (string, []any, error) {
-	table := req.GetTable()
-	if !validIdent.MatchString(table) {
-		return "", nil, errInvalidArgument("invalid table name %q", table)
+// readToSQL converts a ReadRequest (table, columns, key set) into SQL with
+// positional "?" placeholders.
+func readToSQL(req *sppb.ReadRequest, info *tableMeta) (string, []any, error) {
+	if len(req.GetColumns()) == 0 {
+		return "", nil, errInvalidArgument("no columns requested")
 	}
-	var cols []string
 	for _, c := range req.GetColumns() {
 		if !validIdent.MatchString(c) {
 			return "", nil, errInvalidArgument("invalid column name %q", c)
 		}
-		cols = append(cols, quoteIdent(c))
 	}
-	if len(cols) == 0 {
-		return "", nil, errInvalidArgument("no columns requested")
+	where, args, err := keySetWhere(req.GetKeySet(), info)
+	if err != nil {
+		return "", nil, err
 	}
-	q := fmt.Sprintf("SELECT %s FROM %s", strings.Join(cols, ", "), quoteIdent(table))
-	var named []any
-	n := 0
-	ks := req.GetKeySet()
-	if ks == nil || (len(ks.GetKeys()) == 0 && len(ks.GetRanges()) == 0 && !ks.GetAll()) {
-		// Empty key set matches nothing.
-		return q + " WHERE 1=0", nil, nil
+	if where == "" {
+		where = "1=0" // empty key set matches nothing
 	}
-	var conds []string
-	for _, key := range ks.GetKeys() {
-		var vals []string
-		for _, pt := range key.GetValues() {
-			n++
-			vals = append(vals, "?")
-			named = append(named, pointValue(pt))
-		}
-		if len(vals) > 0 {
-			// Point keys match the full PK tuple; with a single-PK table
-			// that is one equality (composite keys are a non-goal).
-			conds = append(conds, fmt.Sprintf("(%s = ?)", quoteIdent(pkCol)))
-			n = len(named) // extra tuple slots beyond column 0 are unused
-		}
-	}
-	// Key ranges constrain the first requested column (composite ranges are
-	// a documented non-goal).
-	for _, r := range ks.GetRanges() {
-		start := r.GetStartClosed()
-		startOpen := false
-		if start == nil {
-			start = r.GetStartOpen()
-			startOpen = true
-		}
-		end := r.GetEndClosed()
-		endOpen := false
-		if end == nil {
-			end = r.GetEndOpen()
-			endOpen = true
-		}
-		if start == nil && end == nil {
-			continue
-		}
-		var parts []string
-		if start != nil {
-			n++
-			op := ">="
-			if startOpen {
-				op = ">"
-			}
-			parts = append(parts, fmt.Sprintf("%s %s ?", quoteIdent(pkCol), op))
-			named = append(named, firstKeyValue(start))
-		}
-		if end != nil {
-			n++
-			op := "<="
-			if endOpen {
-				op = "<"
-			}
-			parts = append(parts, fmt.Sprintf("%s %s ?", quoteIdent(pkCol), op))
-			named = append(named, firstKeyValue(end))
-		}
-		if len(parts) > 0 {
-			conds = append(conds, "("+strings.Join(parts, " AND ")+")")
-		}
-	}
-	if len(conds) == 0 && !ks.GetAll() {
-		return q + " WHERE 1=0", nil, nil
-	}
-	if len(conds) > 0 {
-		q += " WHERE (" + strings.Join(conds, " OR ") + ")"
-	}
+	q := fmt.Sprintf("SELECT %s FROM %s WHERE %s ORDER BY %s",
+		strings.Join(quotedIdents(req.GetColumns()), ", "), quoteIdent(req.GetTable()), where,
+		strings.Join(quotedIdents(info.pk), ", "))
 	if req.GetLimit() > 0 {
 		q += fmt.Sprintf(" LIMIT %d", req.GetLimit())
 	}
-	q += fmt.Sprintf(" ORDER BY %s ASC", quoteIdent(pkCol))
-	return q, named, nil
-}
-
-// pointValue extracts a single scalar key value for positional binding.
-func pointValue(v *structpb.Value) any {
-	gv, _ := sqliteValue(v, nil)
-	return gv
-}
-
-// firstKeyValue binds the first column value of a range boundary key.
-func firstKeyValue(lv *structpb.ListValue) any {
-	if len(lv.GetValues()) == 0 {
-		return nil
-	}
-	return pointValue(lv.GetValues()[0])
-}
-
-// applyMutations applies Commit mutations to the database inside one SQLite
-// transaction so partial failures roll back cleanly.
-func (s *Service) applyMutations(database string, mutations []*sppb.Mutation) error {
-	db, err := s.engine.dbFor(database)
-	if err != nil {
-		return err
-	}
-	tx, err := db.Begin()
-	if err != nil {
-		return errInternal("begin sqlite tx: %v", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	for _, m := range mutations {
-		if err := applyMutation(tx, m); err != nil {
-			return err
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return errInternal("commit: %v", err)
-	}
-	return nil
-}
-
-func applyMutation(tx *sql.Tx, m *sppb.Mutation) error {
-	switch op := m.GetOperation().(type) {
-	case *sppb.Mutation_Insert:
-		return applyWrite(tx, op.Insert, kindInsert)
-	case *sppb.Mutation_Update:
-		return applyWrite(tx, op.Update, kindUpdate)
-	case *sppb.Mutation_Replace:
-		return applyWrite(tx, op.Replace, kindReplace)
-	case *sppb.Mutation_InsertOrUpdate:
-		return applyWrite(tx, op.InsertOrUpdate, kindInsertOrUpdate)
-	case *sppb.Mutation_Delete_:
-		return applyDelete(tx, op.Delete)
-	default:
-		return errInvalidArgument("unsupported mutation type")
-	}
-}
-
-const (
-	kindInsert         = "INSERT"
-	kindUpdate         = "UPDATE"
-	kindReplace        = "REPLACE"
-	kindInsertOrUpdate = "INSERT_OR_UPDATE"
-)
-
-// applyWrite applies one Mutation_Write. Strategy per kind:
-//   - INSERT: plain INSERT → UNIQUE violation → AlreadyExists
-//   - UPDATE: UPDATE with WHERE on the PK; zero rows affected → NotFound
-//   - REPLACE / INSERT_OR_UPDATE: INSERT OR REPLACE
-func applyWrite(tx *sql.Tx, w *sppb.Mutation_Write, kind string) error {
-	if !validIdent.MatchString(w.GetTable()) {
-		return errInvalidArgument("invalid table name %q", w.GetTable())
-	}
-	if len(w.GetColumns()) == 0 || len(w.GetValues()) == 0 {
-		return errInvalidArgument("mutation needs columns and values")
-	}
-	colTypes, err := tableColumnTypes(tx, w.GetTable())
-	if err != nil {
-		return err
-	}
-	if kind == kindUpdate {
-		return applyUpdate(tx, w, colTypes)
-	}
-	verb := "INSERT"
-	if kind == kindReplace || kind == kindInsertOrUpdate {
-		verb = "INSERT OR REPLACE"
-	}
-	placeholders := make([]string, len(w.GetColumns()))
-	for i := range placeholders {
-		placeholders[i] = "?"
-	}
-	q := fmt.Sprintf("%s INTO %s (%s) VALUES (%s)",
-		verb,
-		quoteIdent(w.GetTable()),
-		strings.Join(quotedIdents(w.GetColumns()), ", "),
-		strings.Join(placeholders, ", "),
-	)
-	for _, lv := range w.GetValues() {
-		args, err := writeArgs(w, lv, colTypes)
-		if err != nil {
-			return err
-		}
-		if _, err := tx.Exec(q, args...); err != nil {
-			return sqlErrToGRPC(err)
-		}
-	}
-	return nil
-}
-
-// applyUpdate runs UPDATE ... WHERE pk = ?, failing NotFound when no row
-// matched. Non-PK columns are updated; PK columns act as the selector.
-func applyUpdate(tx *sql.Tx, w *sppb.Mutation_Write, colTypes map[string]*sppb.Type) error {
-	pkCols, err := primaryKeyColumns(tx, w.GetTable())
-	if err != nil {
-		return err
-	}
-	if len(pkCols) == 0 {
-		return errInvalidArgument("table %s has no primary key", w.GetTable())
-	}
-	pkSet := make(map[string]bool, len(pkCols))
-	for _, c := range pkCols {
-		pkSet[c] = true
-	}
-	var set []string
-	var setCols []string
-	for _, c := range w.GetColumns() {
-		if pkSet[c] {
-			continue
-		}
-		set = append(set, fmt.Sprintf("%s = ?", quoteIdent(c)))
-		setCols = append(setCols, c)
-	}
-	where := make([]string, len(pkCols))
-	for i, c := range pkCols {
-		where[i] = fmt.Sprintf("%s = ?", quoteIdent(c))
-	}
-	// The mutation must include the PK columns to identify the row.
-	pkIndex := make(map[string]int, len(w.GetColumns()))
-	for i, c := range w.GetColumns() {
-		pkIndex[c] = i
-	}
-	for _, c := range pkCols {
-		if _, ok := pkIndex[c]; !ok {
-			return errInvalidArgument("UPDATE mutation missing primary key column %s", c)
-		}
-	}
-	if len(set) == 0 {
-		// PK-only update: verify existence instead.
-		q := fmt.Sprintf("SELECT 1 FROM %s WHERE %s", quoteIdent(w.GetTable()), strings.Join(where, " AND "))
-		for _, lv := range w.GetValues() {
-			var args []any
-			for _, c := range pkCols {
-				v, err := sqliteValue(lv.GetValues()[pkIndex[c]], colTypes[c])
-				if err != nil {
-					return err
-				}
-				args = append(args, v)
-			}
-			row := tx.QueryRow(q, args...)
-			var one int
-			if err := row.Scan(&one); err != nil {
-				return errNotFound("Row not found: %s", rowKeyString(w, lv))
-			}
-		}
-		return nil
-	}
-	q := fmt.Sprintf("UPDATE %s SET %s WHERE %s",
-		quoteIdent(w.GetTable()),
-		strings.Join(set, ", "),
-		strings.Join(where, " AND "),
-	)
-	for _, lv := range w.GetValues() {
-		var args []any
-		for _, c := range setCols {
-			v, err := sqliteValue(lv.GetValues()[pkIndex[c]], colTypes[c])
-			if err != nil {
-				return err
-			}
-			args = append(args, v)
-		}
-		for _, c := range pkCols {
-			v, err := sqliteValue(lv.GetValues()[pkIndex[c]], colTypes[c])
-			if err != nil {
-				return err
-			}
-			args = append(args, v)
-		}
-		res, err := tx.Exec(q, args...)
-		if err != nil {
-			return sqlErrToGRPC(err)
-		}
-		n, err := res.RowsAffected()
-		if err != nil {
-			return errInternal("rows affected: %v", err)
-		}
-		if n == 0 {
-			return errNotFound("Row not found: %s", rowKeyString(w, lv))
-		}
-	}
-	return nil
-}
-
-// writeArgs converts one mutation row's values using the table's declared
-// column types.
-func writeArgs(w *sppb.Mutation_Write, lv *structpb.ListValue, colTypes map[string]*sppb.Type) ([]any, error) {
-	var args []any
-	for i, col := range w.GetColumns() {
-		if i >= len(lv.GetValues()) {
-			return nil, errInvalidArgument("mutation row has %d values, want %d", len(lv.GetValues()), len(w.GetColumns()))
-		}
-		v, err := sqliteValue(lv.GetValues()[i], colTypes[col])
-		if err != nil {
-			return nil, err
-		}
-		args = append(args, v)
-	}
-	return args, nil
-}
-
-// applyDelete applies a Delete mutation. The table name lives on the
-// Mutation_Delete operation itself.
-func applyDelete(tx *sql.Tx, d *sppb.Mutation_Delete) error {
-	if !validIdent.MatchString(d.GetTable()) {
-		return errInvalidArgument("invalid table name %q", d.GetTable())
-	}
-	ks := d.GetKeySet()
-	if ks == nil {
-		return errInvalidArgument("delete mutation needs a key set")
-	}
-	if ks.GetAll() {
-		if _, err := tx.Exec(fmt.Sprintf("DELETE FROM %s", quoteIdent(d.GetTable()))); err != nil {
-			return sqlErrToGRPC(err)
-		}
-		return nil
-	}
-	n := 0
-	var conds []string
-	var named []any
-	for _, key := range ks.GetKeys() {
-		var vals []string
-		for _, pt := range key.GetValues() {
-			n++
-			vals = append(vals, "?")
-			named = append(named, pointValue(pt))
-		}
-		if len(vals) > 0 {
-			// Point keys match the full PK tuple; with a single-PK table
-			// that is one equality (composite keys are a non-goal).
-			conds = append(conds, "(pkcol = ?)")
-		}
-	}
-	// Ranges over the PK column.
-	for _, r := range ks.GetRanges() {
-		start := r.GetStartClosed()
-		startOpen := false
-		if start == nil {
-			start = r.GetStartOpen()
-			startOpen = true
-		}
-		end := r.GetEndClosed()
-		endOpen := false
-		if end == nil {
-			end = r.GetEndOpen()
-			endOpen = true
-		}
-		var parts []string
-		if start != nil {
-			n++
-			op := ">="
-			if startOpen {
-				op = ">"
-			}
-			parts = append(parts, fmt.Sprintf("pkcol %s ?", op))
-			named = append(named, firstKeyValue(start))
-		}
-		if end != nil {
-			n++
-			op := "<="
-			if endOpen {
-				op = "<"
-			}
-			parts = append(parts, fmt.Sprintf("pkcol %s ?", op))
-			named = append(named, firstKeyValue(end))
-		}
-		if len(parts) > 0 {
-			conds = append(conds, "("+strings.Join(parts, " AND ")+")")
-		}
-	}
-	if len(conds) == 0 {
-		return nil // matches nothing
-	}
-	// Resolve the actual PK column names for the table, then substitute.
-	pkCols, err := primaryKeyColumns(tx, d.GetTable())
-	if err != nil {
-		return err
-	}
-	pkName := quoteIdent(d.GetTable() + ".pk")
-	if len(pkCols) > 0 {
-		pkName = quoteIdent(pkCols[0])
-	}
-	q := fmt.Sprintf("DELETE FROM %s WHERE (%s)", quoteIdent(d.GetTable()), strings.Join(conds, " OR "))
-	q = strings.ReplaceAll(q, "pkcol", pkName)
-	if _, err := tx.Exec(q, named...); err != nil {
-		return sqlErrToGRPC(err)
-	}
-	return nil
-}
-
-func quotedIdents(names []string) []string {
-	out := make([]string, len(names))
-	for i, n := range names {
-		out[i] = quoteIdent(n)
-	}
-	return out
-}
-
-// tableColumnTypes returns declared SQLite types per column of a table.
-func tableColumnTypes(tx *sql.Tx, table string) (map[string]*sppb.Type, error) {
-	rows, err := tx.Query(fmt.Sprintf("PRAGMA table_info(%s)", quoteIdent(table)))
-	if err != nil {
-		return nil, sqlErrToGRPC(err)
-	}
-	defer func() { _ = rows.Close() }()
-	out := make(map[string]*sppb.Type)
-	for rows.Next() {
-		var cid int
-		var name, typ string
-		var notNull, pk int
-		var dflt any
-		if err := rows.Scan(&cid, &name, &typ, &notNull, &dflt, &pk); err != nil {
-			return nil, errInternal("table_info: %v", err)
-		}
-		out[name] = &sppb.Type{Code: typeCodeFromDecl(typ)}
-	}
-	return out, rows.Err()
-}
-
-// primaryKeyColumns returns the PK column names in declared order.
-// primaryKeyColsDB resolves a table's primary key columns from the open DB.
-func primaryKeyColsDB(db *sql.DB, table string) ([]string, error) {
-	tx, err := db.Begin()
-	if err != nil {
-		return nil, errInternal("begin: %v", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	return primaryKeyColumns(tx, table)
-}
-
-func primaryKeyColumns(tx *sql.Tx, table string) ([]string, error) {
-	rows, err := tx.Query(fmt.Sprintf("PRAGMA table_info(%s)", quoteIdent(table)))
-	if err != nil {
-		return nil, sqlErrToGRPC(err)
-	}
-	defer func() { _ = rows.Close() }()
-	type pkCol struct {
-		name string
-		idx  int
-	}
-	var pk []pkCol
-	for rows.Next() {
-		var cid int
-		var name, typ string
-		var notNull, pkv int
-		var dflt any
-		if err := rows.Scan(&cid, &name, &typ, &notNull, &dflt, &pkv); err != nil {
-			return nil, errInternal("table_info: %v", err)
-		}
-		if pkv > 0 {
-			pk = append(pk, pkCol{name: name, idx: pkv})
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	for i := 1; i < len(pk); i++ {
-		for j := i; j > 0 && pk[j].idx < pk[j-1].idx; j-- {
-			pk[j], pk[j-1] = pk[j-1], pk[j]
-		}
-	}
-	out := make([]string, len(pk))
-	for i, c := range pk {
-		out[i] = c.name
-	}
-	return out, nil
-}
-
-// typeCodeFromDecl maps a SQLite declared type back to a Spanner TypeCode.
-func typeCodeFromDecl(decl string) sppb.TypeCode {
-	up := strings.ToUpper(decl)
-	switch {
-	case strings.Contains(up, "INT"):
-		return sppb.TypeCode_INT64
-	case strings.Contains(up, "REAL"), strings.Contains(up, "FLOA"), strings.Contains(up, "DOUBLE"):
-		return sppb.TypeCode_FLOAT64
-	default:
-		return sppb.TypeCode_STRING
-	}
-}
-
-// rowKeyString renders a human-readable key for NotFound messages.
-func rowKeyString(w *sppb.Mutation_Write, lv *structpb.ListValue) string {
-	parts := make([]string, len(w.GetColumns()))
-	for i, c := range w.GetColumns() {
-		parts[i] = fmt.Sprintf("%s=%v", c, lv.GetValues()[i])
-	}
-	return strings.Join(parts, ", ")
+	return q, args, nil
 }

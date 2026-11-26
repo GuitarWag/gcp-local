@@ -2,6 +2,7 @@ package spanner
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
@@ -16,45 +17,66 @@ import (
 // ---------------------------------------------------------------------------
 
 // sqliteValue converts a Spanner wire value (structpb.Value) to a Go value
-// suitable for database/sql, given the declared column type.
-func sqliteValue(v *structpbValue, typ *sppb.Type) (any, error) {
+// for database/sql, given the declared type. label names the value in the
+// InvalidArgument error a malformed value produces.
+func sqliteValue(v *structpbValue, typ *sppb.Type, label string) (any, error) {
 	if v == nil || v.GetKind() == nil {
 		return nil, nil
 	}
 	if _, isNull := v.GetKind().(*structpb.Value_NullValue); isNull {
 		return nil, nil
 	}
-	if typ.GetCode() == sppb.TypeCode_ARRAY {
-		// Encode arrays as JSON text.
-		return jsonMarshal(v.GetListValue())
+	bad := func() error {
+		return errInvalidArgument("Invalid value for %s: Expected %s.", label, typ.GetCode())
 	}
+	str, isStr := v.GetKind().(*structpb.Value_StringValue)
 	switch typ.GetCode() {
-	case sppb.TypeCode_INT64, sppb.TypeCode_STRING, sppb.TypeCode_TIMESTAMP,
-		sppb.TypeCode_DATE, sppb.TypeCode_NUMERIC, sppb.TypeCode_JSON:
-		return v.GetStringValue(), nil
+	case sppb.TypeCode_ARRAY:
+		if v.GetListValue() == nil {
+			return nil, bad()
+		}
+		return jsonMarshal(v.GetListValue())
+	case sppb.TypeCode_INT64:
+		if !isStr {
+			return nil, bad()
+		}
+		n, err := strconv.ParseInt(str.StringValue, 10, 64)
+		if err != nil {
+			return nil, bad()
+		}
+		return n, nil
 	case sppb.TypeCode_FLOAT64, sppb.TypeCode_FLOAT32:
+		if f, ok := v.GetKind().(*structpb.Value_NumberValue); ok {
+			return f.NumberValue, nil
+		}
+		// NaN / Infinity arrive as strings.
+		if isStr && (str.StringValue == "NaN" || str.StringValue == "Infinity" || str.StringValue == "-Infinity") {
+			return str.StringValue, nil
+		}
+		return nil, bad()
+	case sppb.TypeCode_BOOL:
+		b, ok := v.GetKind().(*structpb.Value_BoolValue)
+		if !ok {
+			return nil, bad()
+		}
+		return b.BoolValue, nil
+	case sppb.TypeCode_TYPE_CODE_UNSPECIFIED:
+		// No declared type (untyped bind parameter): keep the wire scalar.
 		switch k := v.GetKind().(type) {
+		case *structpb.Value_StringValue:
+			return k.StringValue, nil
 		case *structpb.Value_NumberValue:
 			return k.NumberValue, nil
-		case *structpb.Value_StringValue:
-			// NaN / Infinity arrive as strings.
-			switch k.StringValue {
-			case "NaN":
-				return "NaN", nil
-			case "Infinity":
-				return "Infinity", nil
-			case "-Infinity":
-				return "-Infinity", nil
-			}
-			return nil, errInvalidArgument("bad float value %q", k.StringValue)
+		case *structpb.Value_BoolValue:
+			return k.BoolValue, nil
 		}
-		return nil, errInvalidArgument("bad float value type")
-	case sppb.TypeCode_BOOL:
-		return v.GetBoolValue(), nil
-	case sppb.TypeCode_BYTES:
-		return v.GetStringValue(), nil // base64, kept as text
+		return nil, errInvalidArgument("Invalid value for %s: unsupported value kind.", label)
 	default:
-		return v.GetStringValue(), nil
+		// STRING / BYTES (base64) / TIMESTAMP / DATE / NUMERIC / JSON: text.
+		if !isStr {
+			return nil, bad()
+		}
+		return str.StringValue, nil
 	}
 }
 

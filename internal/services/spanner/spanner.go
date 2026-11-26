@@ -18,7 +18,6 @@ import (
 	adminpb "cloud.google.com/go/spanner/admin/database/apiv1/databasepb"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -45,13 +44,6 @@ type sessionRecord struct {
 	multiplexed bool
 	created     time.Time
 	lastUsed    time.Time
-	pendingTxn  []byte // txn begun via ExecuteSql(Begin), committed by Commit
-}
-
-type txnRecord struct {
-	id      []byte
-	session string
-	begun   time.Time
 }
 
 func New(_ any, cfg *config.Config) (*Service, error) {
@@ -169,78 +161,6 @@ func (s *Service) lookupSession(name string) (*sessionRecord, error) {
 	return sess, nil
 }
 
-// ---------------------------------------------------------------------------
-// Transactions
-// ---------------------------------------------------------------------------
-
-func (s *Service) BeginTransaction(ctx context.Context, req *sppb.BeginTransactionRequest) (*sppb.Transaction, error) {
-	sess, err := s.lookupSession(req.GetSession())
-	if err != nil {
-		return nil, err
-	}
-	tx, err := s.beginTxn(sess)
-	if err != nil {
-		return nil, err
-	}
-	return &sppb.Transaction{Id: tx.id}, nil
-}
-
-func (s *Service) beginTxn(sess *sessionRecord) (*txnRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.seq++
-	id := []byte(fmt.Sprintf("txn-%s-%d", sess.name[strings.LastIndex(sess.name, "/")+1:], s.seq))
-	rec := &txnRecord{id: id, session: sess.name, begun: time.Now().UTC()}
-	s.txns[string(id)] = rec
-	return rec, nil
-}
-
-func (s *Service) Commit(ctx context.Context, req *sppb.CommitRequest) (*sppb.CommitResponse, error) {
-	sess, err := s.lookupSession(req.GetSession())
-	if err != nil {
-		return nil, err
-	}
-	var txnID []byte
-	mutations := req.GetMutations()
-	switch t := req.GetTransaction().(type) {
-	case *sppb.CommitRequest_TransactionId:
-		txnID = t.TransactionId
-	case *sppb.CommitRequest_SingleUseTransaction:
-		// single-use implicit transaction: mutations apply directly
-	default:
-		// no selector: mutations-only commit on the session
-	}
-	if txnID == nil {
-		// Fall back to a transaction begun by ExecuteSql(Begin).
-		txnID = sess.pendingTxn
-	}
-	if txnID != nil {
-		s.mu.Lock()
-		_, ok := s.txns[string(txnID)]
-		if !ok {
-			s.mu.Unlock()
-			return nil, errNotFound("Transaction with id %s not found", string(txnID))
-		}
-		delete(s.txns, string(txnID))
-		s.mu.Unlock()
-		sess.pendingTxn = nil
-	}
-	if len(mutations) > 0 {
-		if err := s.applyMutations(sess.database, mutations); err != nil {
-			return nil, err
-		}
-	}
-	return &sppb.CommitResponse{CommitTimestamp: timestamppb.New(time.Now().UTC())}, nil
-}
-
-func (s *Service) Rollback(ctx context.Context, req *sppb.RollbackRequest) (*emptypb.Empty, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	// Unknown transactions are tolerated, matching the real service.
-	delete(s.txns, string(req.GetTransactionId()))
-	return &emptypb.Empty{}, nil
-}
-
 // PartitionQuery / PartitionRead are not supported (query parallelism is a
 // documented non-goal); they return Unimplemented via the embedded type.
 func (s *Service) PartitionQuery(ctx context.Context, req *sppb.PartitionQueryRequest) (*sppb.PartitionResponse, error) {
@@ -260,7 +180,7 @@ func (s *Service) BatchWrite(req *sppb.BatchWriteRequest, stream sppb.Spanner_Ba
 		return err
 	}
 	for _, batch := range req.GetMutationGroups() {
-		if err := s.applyMutations(sess.database, batch.GetMutations()); err != nil {
+		if err := s.commitWrites(sess.database, nil, batch.GetMutations()); err != nil {
 			return err
 		}
 		if err := stream.Send(&sppb.BatchWriteResponse{
@@ -271,24 +191,4 @@ func (s *Service) BatchWrite(req *sppb.BatchWriteRequest, stream sppb.Spanner_Ba
 		}
 	}
 	return nil
-}
-
-// ExecuteBatchDml runs a batch of DML statements in order, stopping at the
-// first error (per the Spanner contract) and reporting per-statement counts.
-func (s *Service) ExecuteBatchDml(ctx context.Context, req *sppb.ExecuteBatchDmlRequest) (*sppb.ExecuteBatchDmlResponse, error) {
-	sess, err := s.lookupSession(req.GetSession())
-	if err != nil {
-		return nil, err
-	}
-	resp := &sppb.ExecuteBatchDmlResponse{}
-	for _, st := range req.GetStatements() {
-		rs, err := s.runSQL(sess, st.GetSql(), st.GetParams(), st.GetParamTypes())
-		if err != nil {
-			st, _ := status.FromError(err)
-			resp.Status = st.Proto()
-			break
-		}
-		resp.ResultSets = append(resp.ResultSets, rs)
-	}
-	return resp, nil
 }

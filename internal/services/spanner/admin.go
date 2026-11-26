@@ -113,7 +113,7 @@ func (a *adminServer) DropDatabase(ctx context.Context, req *adminpb.DropDatabas
 // data path uses (via a synthetic session record).
 func (s *Service) execAdminDDL(database, stmt string) error {
 	sess := &sessionRecord{database: database}
-	rs, err := s.runSQLArgs(sess, stmt, nil)
+	rs, err := s.runSQLArgs(sess, stmt, nil, nil)
 	if err != nil {
 		return err
 	}
