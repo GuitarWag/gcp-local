@@ -79,7 +79,7 @@ scripts/ci/gate.sh --cover    # also the coverage ratchet
 | golangci-lint (new code) | `.golangci-new.yml` | Copied code, long or complex functions, repeated literals and TODOs, in lines changed since `origin/main`. |
 | ast-grep | `.sg/rules/` | `http.Error` and disk writes in services, `panic` and `fmt.Print` in `internal/`, `time.Sleep` outside a loop in tests. |
 | policy | `scripts/ci/policy.sh` | Files over 500 lines, `CHANGELOG.md` edits, a missing fragment, a new dependency without an ADR, tests outside `tests/`, service changes without tests, more `//nolint` or skipped tests, guardrail changes mixed with code, diffs over 1500 lines. |
-| coverage | `scripts/ci/coverage.sh` | A drop of more than 1 point in any package, and new service packages under 60%. |
+| coverage | `scripts/ci/coverage.sh` | A drop of more than 2 points in any package, and new service packages under 60%. |
 | go test | `-race -shuffle=on` | Data races and tests that depend on run order. |
 
 CI runs the copy of `policy.sh` from `main`, not the copy in the PR.

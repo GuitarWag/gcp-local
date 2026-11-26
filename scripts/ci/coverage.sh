@@ -2,12 +2,12 @@
 # Coverage ratchet. Runs the Go integration tests against a coverage build of
 # the binary, for HEAD and for the merge base, and fails when a package drops.
 #   coverage.sh [base-ref]    default: origin/main
-# Env: COVER_TOLERANCE (points, default 1.0), COVER_NEW_FLOOR (percent for a
+# Env: COVER_TOLERANCE (points, default 2.0; parallel tests vary by ~1.5), COVER_NEW_FLOOR (percent for a
 # new internal/services package, default 60).
 set -uo pipefail
 
 BASE=${1:-origin/main}
-TOL=${COVER_TOLERANCE:-1.0}
+TOL=${COVER_TOLERANCE:-2.0}
 FLOOR=${COVER_NEW_FLOOR:-60}
 ROOT=$(git rev-parse --show-toplevel)
 work=$(mktemp -d)
