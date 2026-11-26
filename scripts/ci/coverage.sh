@@ -27,9 +27,9 @@ measure() {
 }
 
 git -C "$ROOT" worktree add -q --detach "$work/base-src" "$(git -C "$ROOT" merge-base HEAD "$BASE")"
-measure "$ROOT" "$work/head" &
-measure "$work/base-src" "$work/base" &
-wait
+# Sequential on purpose: parallel runs change stream timing and add noise.
+measure "$ROOT" "$work/head"
+measure "$work/base-src" "$work/base"
 
 if [ -e "$work/head/status" ]; then
   echo "coverage: tests failed on HEAD"
