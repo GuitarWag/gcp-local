@@ -25,11 +25,13 @@ JANITOR_EVERY=${FACTORY_JANITOR_EVERY:-21600}
 SCOUT_EVERY=${FACTORY_SCOUT_EVERY:-86400}
 RELEASE_EVERY=${FACTORY_RELEASE_EVERY:-3600}
 SCOUT_BACKLOG=${FACTORY_SCOUT_BACKLOG:-5}
+# Private scenarios. Only the spec and accept prompts name the clone.
+HOLDOUT_REPO=${FACTORY_HOLDOUT_REPO:-GuitarWag/gcp-local-holdout}
 DRY=${FACTORY_DRY:-}
 CLAIM="$ROOT/scripts/factory/claim.sh"
 export FACTORY_REPO=$REPO FACTORY_HOME=$HOME_F FACTORY_DRY=$DRY
 
-mkdir -p "$HOME_F/logs" "$HOME_F/run" "$HOME_F/wt"
+mkdir -p "$HOME_F/logs" "$HOME_F/run" "$HOME_F/wt" "$HOME_F/holdout"
 log() { echo "$(date '+%F %T') $*"; }
 
 pick_agent() {
@@ -79,15 +81,19 @@ teams_running() {
 }
 
 prompt_for() {
-  local role=$1 issue=$2 id=$3 wt=$4
+  local role=$1 issue=$2 id=$3 wt=$4 holdout=${5:-}
   printf '%s' "You are the gcp-local factory agent for the role \"$role\". Your agent id is \"$id\".${issue:+ Your issue is #$issue.}
 Work only in the folder $wt. Read AGENTS.md, then .agents/skills/factory/SKILL.md, then .agents/skills/factory/roles/$role.md.
 Do the role now from start to end without questions. No human will answer. Use scripts/factory/claim.sh from this folder."
+  if [ -n "$holdout" ]; then
+    printf '%s' "
+Your holdout folder is $holdout (a clone of the private repo $HOLDOUT_REPO). Never copy its content into gcp-local or into a public comment."
+  fi
 }
 
 # Ephemeral job: own detached worktree on origin/main, removed on exit.
 spawn_job() {
-  local role=$1 issue=${2:-} agent id wt logf model=
+  local role=$1 issue=${2:-} agent id wt logf model= holdout=
   agent=$(pick_agent)
   if [ "$role" = review ]; then
     agent=${REVIEW_AGENT:-$agent}
@@ -103,12 +109,22 @@ spawn_job() {
     [ -n "$issue" ] && "$CLAIM" drop "$issue" "$id"
     return
   }
+  if [ "$role" = spec ] || [ "$role" = accept ]; then
+    holdout="$HOME_F/holdout/$id"
+    gh repo clone "$HOLDOUT_REPO" "$holdout" -- -q >>"$logf" 2>&1 || {
+      log "holdout clone failed for $id"
+      git -C "$ROOT" worktree remove --force "$wt"
+      "$CLAIM" drop "$issue" "$id"
+      return
+    }
+  fi
   log "start $role ${issue:+#$issue }with $agent (log: $logf)"
   (
-    cd "$wt" && run_agent "$agent" "$(prompt_for "$role" "$issue" "$id" "$wt")" "$model" >"$logf" 2>&1
+    cd "$wt" && run_agent "$agent" "$(prompt_for "$role" "$issue" "$id" "$wt" "$holdout")" "$model" >"$logf" 2>&1
     log "end $role ${issue:+#$issue }exit=$?" >>"$logf"
     if [ -n "$issue" ] && "$CLAIM" holds "$issue" "$id"; then "$CLAIM" drop "$issue" "$id"; fi
     git -C "$ROOT" worktree remove --force "$wt"
+    [ -z "$holdout" ] || rm -rf "${holdout:?}"
     rm -f "$HOME_F/run/$id.pid"
   ) &
   echo $! >"$HOME_F/run/$id.pid"
@@ -195,7 +211,7 @@ tick() {
   close_finished_teams
 
   local role issue
-  for role in spec verify plan review; do
+  for role in spec verify plan review accept; do
     for issue in $(issues_in "$role"); do
       [ "$(running_jobs)" -lt "$MAX_JOBS" ] || break 2
       spawn_job "$role" "$issue"

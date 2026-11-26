@@ -4,8 +4,11 @@ You are the boss of a herdr team. Read the `herdr-shepherd` skill. The
 worktree is on the PR branch.
 
 1. Find the PR and its latest `<!-- factory:verdict changes` review.
-   If the issue has a comment from the release script about a conflict
-   or failed checks, that comment is the task.
+   If the issue has a newer comment from the release script about a
+   conflict or failed checks, or a newer `<!-- factory:accept fail -->`
+   comment, that comment is the task. An accept failure gives only one
+   line for each failed scenario. Find the cause in the code against the
+   spec. Do not try to find or read the scenarios.
 2. For a conflict: run `git fetch origin && git merge origin/main`,
    resolve the conflict, and commit the merge. Never rebase or
    force-push a PR branch.

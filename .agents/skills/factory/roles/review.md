@@ -30,6 +30,6 @@ Keep it that way.
    `<!-- factory:verdict changes round=N -->`. Number each finding and
    give `file:line`.
 7. Advance:
-   - approve: `claim.sh advance <issue> stage:review stage:merge`
+   - approve: `claim.sh advance <issue> stage:review stage:accept`
    - changes and N < 3: `claim.sh advance <issue> stage:review stage:fix`
    - changes and N = 3: `claim.sh flag <issue> "3 review rounds without approval"`

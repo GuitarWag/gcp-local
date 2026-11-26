@@ -20,7 +20,9 @@ flowchart LR
   verify -->|FizzBee fail| spec
   plan -->|sub-issues| build
   build -->|herdr team opens PR| review
-  review -->|verdict approve| merge
+  review -->|verdict approve| accept
+  accept -->|holdout pass| merge
+  accept -->|holdout fail, one line per scenario| fix
   review -->|verdict changes| fix
   fix --> review
   merge -->|conflict or red CI| fix
@@ -34,6 +36,7 @@ flowchart LR
 | `stage:plan` | plan agent | ephemeral |
 | `stage:build` | herdr team (opencode boss, pi workers) | herdr tab, worktree on `factory/<issue>` |
 | `stage:review` | review agent | ephemeral, no shared context |
+| `stage:accept` | accept agent (holdout evaluator) | ephemeral, with a private clone of the holdout repo |
 | `stage:fix` | herdr team | herdr tab, worktree on the PR branch |
 | `stage:merge` | `release.sh merge` | script, every tick |
 
@@ -45,6 +48,26 @@ Other processes:
 | `release.sh cut` | every hour | Folds `changelog.d/` into `CHANGELOG.md` and opens a `release/vX.Y.Z` PR. The next tick merges it when CI is green, and `auto-tag.yml` publishes. |
 | janitor agent | every 6 hours | Removes dead worktrees, branches and herdr tabs. Fixes labels. Resets flagged issues once, closes them on the second flag. Files issues for code and docs drift. |
 | scout agent | every 24 hours | Files at most 3 new feature issues, only when fewer than 5 issues wait in spec, verify and plan. |
+
+## Holdout scenarios
+
+The build team writes the code and its own tests from the same spec. If
+it misreads the spec, the code and the tests agree and are both wrong.
+Holdout scenarios close that gap, as a test set does in ML.
+
+- The spec agent writes 3 to 8 plain-English scenarios for each issue in
+  the private repo `GuitarWag/gcp-local-holdout`
+  (`scenarios/<issue>/S<n>.md`). The public spec says only how many.
+- After the review approves, the accept agent writes a short real-SDK
+  program for each scenario and runs it 3 times against the PR code. A
+  scenario passes on 2 of 3 runs. The gate needs every `P0` scenario and
+  90% of all scenarios.
+- A failure goes to `stage:fix` with one line for each failed scenario.
+  The full report stays in the holdout repo.
+- Only the spec and accept prompts name the holdout clone. All agents use
+  the owner's GitHub account, so this wall is a convention, not access
+  control. A second GitHub identity for spec and accept would make it a
+  real wall.
 
 ## Claims
 
