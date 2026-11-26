@@ -24,6 +24,10 @@ tests/typescript/.vite/
 # Explicit allow-list below for things we do want in the repo.
 .*/
 !.github/
+!.agents/
+!.claude/
+.claude/*
+!.claude/skills
 
 # Also ignore stray dotfiles produced by tooling.
 ruvector.db
