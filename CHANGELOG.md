@@ -28,7 +28,7 @@ Until 1.0.0, breaking changes may land in minor releases.
   as JSON). Transactions buffer DML and mutations per transaction id and
   apply-or-discard them atomically on `Commit` / `Rollback`. Malformed
   key/value coercions surface `InvalidArgument` instead of binding nil
-  silently. Errors surface as Spanner-shaped gRPC statuses
+  silently, and `DropDatabase` of an unknown database returns `NotFound`. Errors surface as Spanner-shaped gRPC statuses
   (`NotFound`, `AlreadyExists`, `InvalidArgument`). Partitioned queries,
   interleaved tables, and secondary indexes are not supported and return
   `UNIMPLEMENTED` or a clear error. Tested against the real
