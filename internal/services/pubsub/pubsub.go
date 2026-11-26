@@ -714,7 +714,8 @@ func (s *Service) startPusher(sub subscriptionResource) {
 		s.pushMu.Unlock()
 		return
 	}
-	ctx, cancel := context.WithCancel(s.ctx) // cancel stored in pushers; stopPusher and Stop invoke it.
+	// cancel is stored in s.pushers; stopPusher and Stop invoke it.
+	ctx, cancel := context.WithCancel(s.ctx)
 	s.pushers[sub.Name] = cancel
 	s.pushMu.Unlock()
 

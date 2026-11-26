@@ -85,7 +85,17 @@ func (f *firestoreServer) Listen(stream pb.Firestore_ListenServer) error {
 		req, err := stream.Recv()
 		if err != nil {
 			close(l.done)
+<<<<<<< HEAD
 			<-senderErr //nolint:errcheck // drain the sender goroutine's error (best-effort shutdown)
+=======
+			senderFailure := <-senderErr // drain the sender goroutine's outcome
+			if senderFailure != nil && !errors.Is(senderFailure, errStreamEOF) && senderFailure.Error() != "EOF" {
+				// The sender's failure wins over the recv error only when it
+				// is a real send failure; recv errors (EOF included) are the
+				// normal end-of-stream path.
+				return senderFailure
+			}
+>>>>>>> origin/main
 			if errors.Is(err, errStreamEOF) || err.Error() == "EOF" {
 				return nil
 			}

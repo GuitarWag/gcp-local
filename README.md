@@ -51,6 +51,76 @@ dashboard.
 
 ---
 
+## Architecture overview
+
+One binary, one port. The gateway speaks REST and gRPC on the same listener
+(h2c by default, real HTTP/2 over TLS with `--tls`), and routes requests to
+services by `/v1/`, `/v2/`, and `/v3/` path prefixes. Most services read and
+write state through one shared `state.Store` — in-memory by default, or a
+BoltDB file. BigQuery and Memorystore keep state in their own engines;
+`/admin/reset` clears only the `state.Store` namespaces listed in
+`internal/gateway/gateway.go`. The dashboard and console are embedded HTML
+served from the same port.
+
+```mermaid
+flowchart TD
+    SDK["Your SDK code — Go / Python / TypeScript"] --> GW
+    TESTS["Integration tests — real GCP client libraries"] --> GW
+    GW["Gateway — one port: REST + gRPC + h2c"]
+    GW --> DATA
+    GW --> COMPUTE
+    GW --> SECOPS
+    GW --> UI["Dashboard + Console — embedded HTML, same port"]
+
+    subgraph DATA["Data and messaging"]
+        direction LR
+        STORAGE["Cloud Storage"]
+        PUBSUB["Pub/Sub"]
+        FIRESTORE["Firestore"]
+        BIGQUERY["BigQuery"]
+        MEMO["Memorystore (own port)"]
+        BT["Bigtable (subset)"]
+        SP["Spanner (subset)"]
+    end
+
+    subgraph COMPUTE["Compute and tasking"]
+        direction LR
+        RUN["Cloud Run"]
+        FUNC["Cloud Functions"]
+        SQL["CloudSQL"]
+        TASKS["Cloud Tasks"]
+        SCHED["Cloud Scheduler"]
+    end
+
+    subgraph SECOPS["Security and observability"]
+        direction LR
+        SM["Secret Manager"]
+        KMS["KMS"]
+        LOG["Cloud Logging"]
+        MON["Cloud Monitoring"]
+        META["Metadata server"]
+        IAMC["IAM credentials"]
+        IAMA["IAM admin"]
+        IAMP["IAM policies"]
+    end
+
+    DATA --> STORE
+    COMPUTE --> STORE
+    SECOPS --> STORE
+    STORE["state.Store — memory (default) or BoltDB"]
+```
+
+Every box maps to a row in the [Services](#services) table and a package
+under `internal/services/`. Bigtable and Spanner have working data paths;
+Dataflow, Vertex AI, and AlloyDB are not implemented. Cloud Functions shares the Cloud
+Run package, and IAM policies are served through the services'
+`:getIamPolicy` / `:setIamPolicy` verbs on top of a shared `internal/iam`
+store.
+
+The pipeline that builds and reviews this repo is described in
+[docs/factory.md](docs/factory.md), and architecture decisions are recorded
+in [docs/adr/README.md](docs/adr/README.md).
+
 ## Use cases
 
 ### 1. Local development without burning GCP credits
@@ -294,8 +364,8 @@ services:
 | IAM credentials  | working           | `iamcredentials.googleapis.com` `generateAccessToken` and `generateIdToken` for service-account impersonation. Shares signing key with metadata server. |
 | IAM policies     | working           | `:getIamPolicy` / `:setIamPolicy` / `:testIamPermissions` round-trip on Pub/Sub topics + subscriptions, Secret Manager secrets, KMS keyrings + keys, Cloud Tasks queues, Cloud Run services, Cloud Functions, and service accounts. GCS-shaped `GET/PUT /b/{bucket}/iam` for Cloud Storage buckets. No permission enforcement. |
 | IAM admin        | working (subset)  | `iam.googleapis.com` `projects.serviceAccounts` CRUD + `serviceAccounts.keys` create/list/delete with a fake base64 credentials JSON payload. |
-| Bigtable         | stub              | gRPC connection succeeds; data methods return `UNIMPLEMENTED`. |
-| Spanner          | working (subset)  | Databases via DatabaseAdmin (`CREATE/ALTER/DROP TABLE`), sessions, `ExecuteSql` (SELECT + DML), `Read` (point keys + ranges), `Commit` (all 5 mutation types), transactions, streaming. Partitioned queries, interleaved tables, and indexes are not supported. |
+| Bigtable         | working (subset)  | Data plane: `MutateRow`, `MutateRows`, `ReadRows` (chunk streaming, row keys/ranges, `RowsLimit`, reversed scans), `SampleRowKeys`, `CheckAndMutateRow`, and the row-filter tree (Chain, Interleave, Condition, regex/range/limit/label filters). Admin: `CreateTable`, `ListTables`, `GetTable`, `DeleteTable`, `ModifyColumnFamilies`, `DropRowRange`. `ReadModifyWriteRow` and query/change-stream RPCs return `UNIMPLEMENTED`. |
+| Spanner          | working (subset)  | Databases via DatabaseAdmin (`CREATE/ALTER/DROP TABLE`), sessions, `ExecuteSql` (SELECT + DML), `Read` (point keys + ranges), `Commit` (all 5 mutation types), transactions (buffered DML/mutations, apply-or-discard on commit/rollback), streaming. Partitioned queries, interleaved tables, and indexes are not supported. |
 | Dataflow         | not implemented   |                                                     |
 | Vertex AI        | not implemented   |                                                     |
 | AlloyDB          | not implemented   |                                                     |
@@ -458,11 +528,11 @@ matches it with these explicit gaps:
   (pgproto3 + modernc.org/sqlite) and a `mysql` engine behind a MySQL wire
   shim (go-mysql-org/go-mysql + the same sqlite handle). The `postgres`
   engine (real pgembedded binary) is not implemented yet.
-- Bigtable is a gRPC stub that returns `UNIMPLEMENTED` for data operations.
-  Spanner has a data path backed by per-database SQLite: DDL via
-  DatabaseAdmin, sessions, `ExecuteSql`, `Read`, and all five mutation
-  types through `Commit`. Partitioned queries, interleaved tables, and
-  secondary indexes are not supported.
+- Bigtable is a working data path (see table above). Spanner has a data
+  path backed by per-database SQLite: DDL via DatabaseAdmin, sessions,
+  `ExecuteSql`, `Read`, and all five mutation types through `Commit`,
+  with per-transaction buffering (apply-or-discard). Partitioned queries,
+  interleaved tables, and secondary indexes are not supported.
 - Cloud Run / Cloud Functions can spawn a local executable (`command:` on the
   resource) or proxy to an existing `backendUrl`. There is no container image
   support — bring your own binary.

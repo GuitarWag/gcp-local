@@ -142,10 +142,10 @@ func TestSeedScriptDrivesAllConsoleEndpoints(t *testing.T) {
 	expectArrayCount(t, em, "/console/api/cloudrun/list", "resources", 4)
 	expectArrayCount(t, em, "/console/api/functions/list", "resources", 4)
 
-	// Stub services — surface the "stub" state via the status endpoint.
+	// Bigtable now implements its data path; Spanner stays a stub.
 	expectField(t, em, "/console/api/bigtable/status", "state", func(v any) bool {
 		s, _ := v.(string)
-		return s == "stub"
+		return s == "ready"
 	})
 	// Spanner now has a data path: it reports "ready" instead of "stub".
 	expectField(t, em, "/console/api/spanner/status", "state", func(v any) bool {

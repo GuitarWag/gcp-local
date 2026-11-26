@@ -8,7 +8,7 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
-## [0.11.0] - 2026-11-25
+## [0.12.0] - 2026-11-26
 
 ### Added
 
@@ -25,11 +25,80 @@ Until 1.0.0, breaking changes may land in minor releases.
   `ExecuteBatchDml`. Spanner types map onto SQLite storage: `INT64` to
   `INTEGER`, `FLOAT64` to `REAL`, `BOOL` to `INTEGER`, and
   `STRING`/`BYTES`/`TIMESTAMP`/`DATE`/`NUMERIC`/arrays to `TEXT` (arrays
-  as JSON). Errors surface as Spanner-shaped gRPC statuses
+  as JSON). Transactions buffer DML and mutations per transaction id and
+  apply-or-discard them atomically on `Commit` / `Rollback`. Malformed
+  key/value coercions surface `InvalidArgument` instead of binding nil
+  silently. Errors surface as Spanner-shaped gRPC statuses
   (`NotFound`, `AlreadyExists`, `InvalidArgument`). Partitioned queries,
   interleaved tables, and secondary indexes are not supported and return
   `UNIMPLEMENTED` or a clear error. Tested against the real
   `cloud.google.com/go/spanner` client library. Closes #3.
+
+## [0.11.0] - 2026-11-25
+
+### Added
+
+- **Bigtable data path.** The Bigtable emulator now implements the real
+  `google.bigtable.v2.Bigtable` data plane and the
+  `google.bigtable.admin.v2.BigtableTableAdmin` table lifecycle on top
+  of the shared state store, so `cloud.google.com/go/bigtable` (and any
+  wire-compatible client pointed at `BIGTABLE_EMULATOR_HOST`) works
+  against a persistent store instead of getting UNIMPLEMENTED for every
+  call. Implemented: `MutateRow`, `MutateRows` (per-entry statuses),
+  `ReadRows` (CellChunk streaming, `RowSet` row keys and row ranges,
+  `RowsLimit`), `SampleRowKeys`, `CheckAndMutateRow` (predicate filter
+  with true/false mutation branches), and the row-filter tree — Chain,
+  Interleave, Condition, family/qualifier/value regex, column/value
+  ranges, timestamp ranges, per-row and per-column cell limits,
+  strip-value, apply-label, row-sample, pass/block-all. Table admin
+  covers `CreateTable` (AlreadyExists on dupes), `ListTables`,
+  `GetTable`, `DeleteTable`, `ModifyColumnFamilies`
+  (create/drop/update, with family data purged on drop), and
+  `DropRowRange` (by prefix or full table). Mutations carry explicit or
+  server-assigned millisecond-granular timestamps; rows and table
+  metadata live in the `bigtable/tables` and `bigtable/rows` state
+  namespaces, persist across restarts with BoltDB, and reset via
+  `POST /admin/reset`. `ReadModifyWriteRow` and the query/
+  change-stream RPCs (`PrepareQuery`, `ExecuteQuery`,
+  `ReadChangeStream`) still return UNIMPLEMENTED. The
+  `tests/go/bigtable_test.go` integration suite drives all of it
+  through the real Go SDK. Closes #2.
+
+## [0.10.3] - 2026-11-26
+
+### Changed
+
+- **README architecture overview.** Added a mermaid component diagram to
+  the README right after the "Why" section: gateway on one port (REST +
+  gRPC + h2c), the emulated services grouped by function, the shared
+  `state.Store` backends, and the embedded dashboard/console, plus the
+  three-language test harness feeding the same wire surface. Every service
+  box cross-checks against `internal/services/` and the README service
+  table — no stale claims. State wording is exact: most services share
+  `state.Store`, but BigQuery and Memorystore keep state in their own
+  engines, and `/admin/reset` clears only the namespaces listed in
+  `internal/gateway/gateway.go`. Also added a short pointer to the
+  software factory pipeline (`docs/factory.md`) and the decision record
+  index (`docs/adr/README.md`). Docs-only change, no service behaviour
+  touched.
+
+  Closes #44.
+
+## [0.10.2] - 2026-11-25
+
+### Added
+
+- **adrlog decision records.** Adopted the `adrlog` CLI as the mandatory
+  architecture-decision-record system. Decisions that change architecture,
+  engine choice, wire behaviour, process, or dependencies must be recorded
+  via `adrlog new` under `docs/adr/` before they land in a PR; the generated
+  `docs/adr/README.md` index (with mermaid decision graph) is regenerated
+  with `adrlog index` and never edited by hand. The first record
+  ([ADR 20261125-231025](docs/adr/20261125-231025-adopt-adrlog-cli-for-architecture-decision.md))
+  documents the adoption itself. Factory builders now check accepted ADRs
+  before diverging from them. Tooling is developer-local only — not a Go
+  dependency, not shipped in the binary. Records the adoption decision; the
+  README architecture diagram (#44) remains future work.
 
 ## [0.10.1] - 2026-11-25
 
@@ -532,8 +601,11 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.12.0
 [0.11.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.11.0
+[0.10.3]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.10.3
+[0.10.2]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.10.2
 [0.10.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.10.1
 [0.10.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.10.0
 [0.9.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.9.0

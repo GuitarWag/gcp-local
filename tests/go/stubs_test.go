@@ -31,12 +31,20 @@ func TestBigtableMethodsReturnUnimplemented(t *testing.T) {
 	c := btpb.NewBigtableClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, err := c.MutateRow(ctx, &btpb.MutateRowRequest{TableName: "x"})
+	// Deliberately-stubbed RPCs must still return Unimplemented.
+	_, err := c.ReadModifyWriteRow(ctx, &btpb.ReadModifyWriteRowRequest{TableName: "x"})
 	if err == nil {
 		t.Fatal("expected error")
 	}
 	if status.Code(err) != codes.Unimplemented {
-		t.Errorf("expected Unimplemented, got %v", err)
+		t.Errorf("ReadModifyWriteRow: expected Unimplemented, got %v", err)
+	}
+	_, err = c.PrepareQuery(ctx, &btpb.PrepareQueryRequest{Query: "SELECT 1"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if status.Code(err) != codes.Unimplemented {
+		t.Errorf("PrepareQuery: expected Unimplemented, got %v", err)
 	}
 }
 
