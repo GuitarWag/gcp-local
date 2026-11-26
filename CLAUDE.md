@@ -138,6 +138,21 @@ before merge.
 - Keep files under ~500 lines. Split when they grow.
 - No new deps without a clear need. Pure Go preferred (avoid CGo).
 
+## Architecture decision records (adrlog)
+
+- Any decision that changes architecture, engine choice, wire behaviour,
+  process, or dependencies **must** be recorded with `adrlog new <title>`
+  before the change lands in a PR. Records live in `docs/adr/`; the index
+  (with mermaid graph) in `docs/adr/README.md` is generated — run
+  `adrlog index` after adding or changing records, never edit it by hand.
+- Before diverging from an `accepted` ADR, write a superseding record
+  (`adrlog new ... --supersedes <id>`). The factory orchestrator won't spec
+  an issue that contradicts an accepted ADR.
+- Run `adrlog lint` on every PR touching `docs/adr/`.
+- Quirk: adrlog resolves the repo's primary checkout — from a linked
+  worktree it writes to the main working copy, so move generated files into
+  your worktree before committing.
+
 ## Things that will bite you
 
 - `STORAGE_EMULATOR_HOST` env var matters; the Go and Python GCS SDKs use

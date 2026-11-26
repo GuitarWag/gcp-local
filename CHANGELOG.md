@@ -8,6 +8,22 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-11-25
+
+### Added
+
+- **adrlog decision records.** Adopted the `adrlog` CLI as the mandatory
+  architecture-decision-record system. Decisions that change architecture,
+  engine choice, wire behaviour, process, or dependencies must be recorded
+  via `adrlog new` under `docs/adr/` before they land in a PR; the generated
+  `docs/adr/README.md` index (with mermaid decision graph) is regenerated
+  with `adrlog index` and never edited by hand. The first record
+  ([ADR 20261125-231025](docs/adr/20261125-231025-adopt-adrlog-cli-for-architecture-decision.md))
+  documents the adoption itself. Factory builders now check accepted ADRs
+  before diverging from them. Tooling is developer-local only — not a Go
+  dependency, not shipped in the binary. Closes #44 (docs scope), records
+  the adoption decision.
+
 ## [0.10.1] - 2026-11-25
 
 ### Changed
@@ -509,7 +525,8 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.10.1...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.10.2...HEAD
+[0.10.2]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.10.2
 [0.10.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.10.1
 [0.10.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.10.0
 [0.9.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.9.0

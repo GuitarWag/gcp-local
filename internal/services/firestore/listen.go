@@ -84,8 +84,7 @@ func (f *firestoreServer) Listen(stream pb.Firestore_ListenServer) error {
 	for {
 		req, err := stream.Recv()
 		if err != nil {
-			close(l.done)
-			<-senderErr
+			close(l.done) // sender sees this, sends nil/err into the buffered channel, and returns
 			if errors.Is(err, errStreamEOF) || err.Error() == "EOF" {
 				return nil
 			}
