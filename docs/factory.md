@@ -83,6 +83,19 @@ An agent owns an issue only while it holds a claim. A claim is a comment
   `factory:failed` comment. After 3 failures at one stage, the issue gets
   `factory:flagged`, and the janitor resets it once to `stage:spec`.
 
+## Watchdog
+
+A model request that gets no answer never times out, so an agent can hang
+for good and keep its job slot. On every tick, the orchestrator stops an
+agent whose log has not changed for `FACTORY_STALL_MIN` minutes (default
+20), or that has run for `FACTORY_JOB_MAX_MIN` minutes (default 90). The
+job wrapper then releases the claim and records a failed attempt, and the
+next tick starts the stage again. pi runs with `--mode json` so that its
+log shows progress while it works.
+
+Problems in the pipeline itself, such as flagged issues, wrong labels or
+dead worktrees, are the janitor's job.
+
 ## Limits
 
 | Limit | Default | Variable |
