@@ -8,6 +8,23 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.12.2] - 2026-11-26
+
+### Changed
+
+- **The janitor runs every hour.** It ran every 6 hours, so a flagged
+  issue or a broken label could block the pipeline for that long. Set
+  `FACTORY_JANITOR_EVERY` (seconds) to change it.
+
+### Fixed
+
+- **Factory watchdog for hung agents.** An agent whose model request got
+  no answer hung forever and kept its job slot, so the factory stopped
+  starting work. The orchestrator now stops an agent after 20 minutes
+  with no log output or 90 minutes in total, and the stage restarts on
+  the next tick. pi jobs stream JSON events so that progress shows in
+  the log.
+
 ## [0.12.1] - 2026-11-26
 
 ### Changed
@@ -641,7 +658,8 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.12.1...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.12.2...HEAD
+[0.12.2]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.12.2
 [0.12.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.12.1
 [0.12.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.12.0
 [0.11.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.11.0
