@@ -79,7 +79,7 @@ flowchart TD
         FIRESTORE["Firestore"]
         BIGQUERY["BigQuery"]
         MEMO["Memorystore (own port)"]
-        BT["Bigtable (stub)"]
+        BT["Bigtable (subset)"]
         SP["Spanner (stub)"]
     end
 
@@ -111,8 +111,8 @@ flowchart TD
 ```
 
 Every box maps to a row in the [Services](#services) table and a package
-under `internal/services/`. Bigtable and Spanner are gRPC stubs; Dataflow,
-Vertex AI, and AlloyDB are not implemented. Cloud Functions shares the Cloud
+under `internal/services/`. Bigtable has a working data path and Spanner is a
+gRPC stub; Dataflow, Vertex AI, and AlloyDB are not implemented. Cloud Functions shares the Cloud
 Run package, and IAM policies are served through the services'
 `:getIamPolicy` / `:setIamPolicy` verbs on top of a shared `internal/iam`
 store.
@@ -364,7 +364,7 @@ services:
 | IAM credentials  | working           | `iamcredentials.googleapis.com` `generateAccessToken` and `generateIdToken` for service-account impersonation. Shares signing key with metadata server. |
 | IAM policies     | working           | `:getIamPolicy` / `:setIamPolicy` / `:testIamPermissions` round-trip on Pub/Sub topics + subscriptions, Secret Manager secrets, KMS keyrings + keys, Cloud Tasks queues, Cloud Run services, Cloud Functions, and service accounts. GCS-shaped `GET/PUT /b/{bucket}/iam` for Cloud Storage buckets. No permission enforcement. |
 | IAM admin        | working (subset)  | `iam.googleapis.com` `projects.serviceAccounts` CRUD + `serviceAccounts.keys` create/list/delete with a fake base64 credentials JSON payload. |
-| Bigtable         | stub              | gRPC connection succeeds; data methods return `UNIMPLEMENTED`. |
+| Bigtable         | working (subset)  | Data plane: `MutateRow`, `MutateRows`, `ReadRows` (chunk streaming, row keys/ranges, `RowsLimit`, reversed scans), `SampleRowKeys`, `CheckAndMutateRow`, and the row-filter tree (Chain, Interleave, Condition, regex/range/limit/label filters). Admin: `CreateTable`, `ListTables`, `GetTable`, `DeleteTable`, `ModifyColumnFamilies`, `DropRowRange`. `ReadModifyWriteRow` and query/change-stream RPCs return `UNIMPLEMENTED`. |
 | Spanner          | stub              | `CreateSession` works; data methods return `UNIMPLEMENTED`. |
 | Dataflow         | not implemented   |                                                     |
 | Vertex AI        | not implemented   |                                                     |
@@ -528,8 +528,8 @@ matches it with these explicit gaps:
   (pgproto3 + modernc.org/sqlite) and a `mysql` engine behind a MySQL wire
   shim (go-mysql-org/go-mysql + the same sqlite handle). The `postgres`
   engine (real pgembedded binary) is not implemented yet.
-- Bigtable and Spanner are gRPC stubs that return `UNIMPLEMENTED` for data
-  operations.
+- Bigtable is a working data path (see table above); Spanner is a gRPC stub
+  that returns `UNIMPLEMENTED` for data operations.
 - Cloud Run / Cloud Functions can spawn a local executable (`command:` on the
   resource) or proxy to an existing `backendUrl`. There is no container image
   support — bring your own binary.
