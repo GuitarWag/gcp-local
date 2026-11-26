@@ -83,12 +83,51 @@ An agent owns an issue only while it holds a claim. A claim is a comment
   `factory:failed` comment. After 3 failures at one stage, the issue gets
   `factory:flagged`, and the janitor resets it once to `stage:spec`.
 
+## Runners: where agents run
+
+`FACTORY_RUNNER` selects how stage jobs (spec, verify, plan, review,
+accept) run.
+
+| Runner | Stage jobs | Janitor and scout | You can chat with them |
+|---|---|---|---|
+| `headless` (default) | `pi -p` or `opencode run` in the background, log in `~/.factory/logs/` | Background jobs | Teams only |
+| `herdr` | One interactive agent per tab in the herdr workspace `factory`; the tab closes when the job advances its issue | Resident agents in tabs `janitor` and `scout`, always open | Every agent |
+
+With `herdr`, the factory space looks like this:
+
+- `janitor`, `scout`: resident agents. Between passes, type in their pane
+  to ask or instruct them. The orchestrator types `RUN PASS` when a pass
+  is due and the agent is idle; while you chat, it waits.
+- `spec-37`, `review-38`, …: one stage job per tab. Type in the pane to
+  steer the job. The text you type counts as the owner's instruction.
+- `f37`, …: build and fix teams from herdr-shepherd.
+
+Start it from a pane inside herdr:
+
+```sh
+cd ~/.factory/main && FACTORY_RUNNER=herdr scripts/factory/orchestrator.sh
+```
+
+herdr-shepherd opens a team tab in the focused workspace, so the
+orchestrator focuses the factory space for the launch and then gives focus
+back. Stage job tabs and resident tabs open with `--no-focus`.
+
+A fresh interactive opencode can pick a recently used model, not the
+configured one. The orchestrator writes `~/.factory/opencode.json` with
+the model from `~/.config/opencode/opencode.json` (or
+`FACTORY_OPENCODE_MODEL`) and starts every factory opencode with
+`OPENCODE_CONFIG` set to it. Team agents from herdr-shepherd do not get
+this setting.
+
 ## Watchdog
 
 A model request that gets no answer never times out, so an agent can hang
 for good and keep its job slot. On every tick, the orchestrator stops an
-agent whose log has not changed for `FACTORY_STALL_MIN` minutes (default
-20), or that has run for `FACTORY_JOB_MAX_MIN` minutes (default 90). The
+agent whose output has not changed for `FACTORY_STALL_MIN` minutes
+(default 20), or that has run for `FACTORY_JOB_MAX_MIN` minutes (default
+90). For headless jobs it watches the log file; for herdr jobs it watches
+the pane's screen, without the bottom lines where agents animate a
+spinner. A herdr job whose tab you close counts as a failed attempt. The
 job wrapper then releases the claim and records a failed attempt, and the
 next tick starts the stage again. pi runs with `--mode json` so that its
 log shows progress while it works.

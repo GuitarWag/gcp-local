@@ -3,6 +3,8 @@
 #   orchestrator.sh          loop forever, one tick every FACTORY_TICK seconds
 #   orchestrator.sh --once   run one tick
 # FACTORY_DRY=1 logs what it would start and changes nothing.
+# FACTORY_RUNNER=herdr runs every agent in a visible tab of the herdr
+# workspace "factory"; headless (default) runs stage jobs in the background.
 # Run it inside a herdr pane: build and fix teams open as herdr tabs.
 set -uo pipefail
 
@@ -27,6 +29,10 @@ JANITOR_EVERY=${FACTORY_JANITOR_EVERY:-3600}
 SCOUT_EVERY=${FACTORY_SCOUT_EVERY:-86400}
 RELEASE_EVERY=${FACTORY_RELEASE_EVERY:-3600}
 SCOUT_BACKLOG=${FACTORY_SCOUT_BACKLOG:-5}
+RUNNER=${FACTORY_RUNNER:-headless}
+# Resident roles stay open in a herdr tab, so the owner can chat with them.
+RESIDENT=${FACTORY_RESIDENT-$([ "$RUNNER" = herdr ] && echo "janitor scout")}
+RESIDENT_AGENT=${FACTORY_RESIDENT_AGENT:-opencode}
 # Private scenarios. Only the spec and accept prompts name the clone.
 HOLDOUT_REPO=${FACTORY_HOLDOUT_REPO:-GuitarWag/gcp-local-holdout}
 DRY=${FACTORY_DRY:-}
@@ -35,6 +41,8 @@ export FACTORY_REPO=$REPO FACTORY_HOME=$HOME_F FACTORY_DRY=$DRY
 
 mkdir -p "$HOME_F/logs" "$HOME_F/run" "$HOME_F/wt" "$HOME_F/holdout"
 log() { echo "$(date '+%F %T') $*"; }
+# shellcheck source=scripts/factory/herdr.sh
+. "$ROOT/scripts/factory/herdr.sh"
 
 pick_agent() {
   local n
@@ -61,7 +69,7 @@ running_jobs() {
     [ -e "$f" ] || continue
     if kill -0 "$(cat "$f")" 2>/dev/null; then n=$((n + 1)); else rm -f "$f"; fi
   done
-  echo "$n"
+  echo $((n + $(herdr_jobs)))
 }
 
 mtime() { stat -f %m "$1" 2>/dev/null || stat -c %Y "$1"; }
@@ -86,7 +94,7 @@ watchdog() {
   done
 }
 
-role_running() { ls "$HOME_F"/run/"$1"-*.pid >/dev/null 2>&1; }
+role_running() { ls "$HOME_F"/run/"$1"-*.pid "$HOME_F"/run/"$1"-*.herdr >/dev/null 2>&1; }
 
 # Open owner issues in a stage, without a claim, oldest first.
 issues_in() {
@@ -109,7 +117,13 @@ prompt_for() {
   local role=$1 issue=$2 id=$3 wt=$4 holdout=${5:-}
   printf '%s' "You are the gcp-local factory agent for the role \"$role\". Your agent id is \"$id\".${issue:+ Your issue is #$issue.}
 Work only in the folder $wt. Read AGENTS.md, then .agents/skills/factory/SKILL.md, then .agents/skills/factory/roles/$role.md.
-Do the role now from start to end without questions. No human will answer. Use scripts/factory/claim.sh from this folder."
+Do the role now from start to end without questions. Use scripts/factory/claim.sh from this folder."
+  if [ "$RUNNER" = herdr ]; then
+    printf '%s' "
+Do not wait for answers. The owner may type in this pane: follow what the owner types."
+  else
+    printf '%s' " No human will answer."
+  fi
   if [ -n "$holdout" ]; then
     printf '%s' "
 Your holdout folder is $holdout (a clone of the private repo $HOLDOUT_REPO). Never copy its content into gcp-local or into a public comment."
@@ -143,6 +157,14 @@ spawn_job() {
       return
     }
   fi
+  if [ "$RUNNER" = herdr ] && [ -n "$issue" ]; then
+    start_herdr_job "$role" "$issue" "$id" "$agent" "$model" "$wt" "$holdout" || {
+      "$CLAIM" drop "$issue" "$id"
+      git -C "$ROOT" worktree remove --force "$wt"
+      [ -z "$holdout" ] || rm -rf "${holdout:?}"
+    }
+    return
+  fi
   log "start $role ${issue:+#$issue }with $agent (log: $logf)"
   (
     cd "$wt" && run_agent "$agent" "$(prompt_for "$role" "$issue" "$id" "$wt" "$holdout")" "$model" >"$logf" 2>&1
@@ -155,85 +177,32 @@ spawn_job() {
   echo $! >"$HOME_F/run/$id.pid"
 }
 
-team_tab() {
-  herdr agent list 2>/dev/null |
-    jq -r --arg n "f$1-boss" '.result.agents[] | select(.name == $n) | .tab_id' | head -1
+overdue() {
+  local last
+  last=$(cat "$HOME_F/last-$1" 2>/dev/null || echo 0)
+  [ $(($(date +%s) - last)) -ge "$2" ]
 }
+stamp() { [ -n "$DRY" ] || date +%s >"$HOME_F/last-$1"; }
+due() { overdue "$1" "$2" && stamp "$1"; }
 
-close_team() {
-  local tab
-  tab=$(team_tab "$1")
-  [ -n "$tab" ] || return 0
-  log "close herdr team f$1"
-  [ -n "$DRY" ] || herdr tab close "$tab" >/dev/null
-}
+is_resident() { case " $RESIDENT " in *" $1 "*) return 0 ;; esac; return 1; }
 
-# Build or fix: a herdr team in a worktree on the feature branch.
-spawn_team() {
-  local role=$1 issue=$2 branch size wt pr id
-  if [ "$role" = fix ]; then
-    pr=$(gh issue view "$issue" -R "$REPO" --json closedByPullRequestsReferences -q '.closedByPullRequestsReferences[-1].number // ""')
-    branch=$([ -n "$pr" ] && gh pr view "$pr" -R "$REPO" --json headRefName -q .headRefName)
-    size=2
-  else
-    local plan
-    plan=$(gh issue view "$issue" -R "$REPO" --json comments \
-      -q "[.comments[] | select(.author.login == \"$OWNER\") | .body | select(startswith(\"<!-- factory:plan \"))][-1] // \"\"" | head -1)
-    branch=$(printf '%s' "$plan" | sed -n 's/.*branch=\([^ ]*\).*/\1/p')
-    size=$(printf '%s' "$plan" | sed -n 's/.*team=\([0-9]*\).*/\1/p')
+# Janitor and scout: resident agents when listed in RESIDENT, else ephemeral jobs.
+interval_role() {
+  local role=$1 every=$2
+  if is_resident "$role"; then
+    ensure_resident "$role" || return
+    if overdue "$role" "$every" && run_resident "$role"; then stamp "$role"; fi
+  elif ! role_running "$role" && due "$role" "$every"; then
+    spawn_job "$role"
   fi
-  branch=${branch:-factory/$issue}
-  size=${size:-3}
-  if [ -n "$DRY" ]; then log "dry-run: start $role team f$issue on $branch with $size workers"; return; fi
-
-  id="team-f$issue"
-  "$CLAIM" claim "$issue" "$id" "$TEAM_LEASE" || return
-  close_team "$issue"
-  wt="$HOME_F/wt/f$issue"
-  git -C "$ROOT" fetch -q origin
-  if [ ! -d "$wt" ]; then
-    if git -C "$ROOT" ls-remote --exit-code --heads origin "$branch" >/dev/null; then
-      git -C "$ROOT" worktree add -q -B "$branch" "$wt" "origin/$branch"
-    else
-      git -C "$ROOT" worktree add -q -b "$branch" "$wt" origin/main
-    fi || { log "worktree for $branch failed"; "$CLAIM" drop "$issue" "$id"; return; }
-  fi
-  log "start $role team f$issue on $branch with $size workers"
-  herdr-shepherd "f$issue" --cwd "$wt" --boss-agent "$BOSS" --worker-agent "$WORKER" \
-    --workers "$size" >>"$HOME_F/logs/f$issue.log" 2>&1 || {
-    "$CLAIM" drop "$issue" "$id"
-    return
-  }
-  sleep 30 # ponytail: fixed wait for the boss to start; poll herdr if it is too short
-  herdr-shepherd "f$issue" --send boss --message "$(prompt_for "$role" "$issue" "$id" "$wt")
-You are the herdr boss of team f$issue. Renew the claim with: scripts/factory/claim.sh renew $issue $id $TEAM_LEASE" \
-    >>"$HOME_F/logs/f$issue.log" 2>&1
-}
-
-# Close tabs of teams whose issue left build or fix.
-close_finished_teams() {
-  local issue active
-  for issue in $(herdr agent list 2>/dev/null |
-    jq -r '.result.agents[].name // empty | select(test("^f[0-9]+-boss$")) | ltrimstr("f") | rtrimstr("-boss")'); do
-    active=$(gh issue view "$issue" -R "$REPO" --json state,labels -q '
-      [.labels[].name] as $l
-      | .state == "OPEN" and ($l | index("factory:claimed")) != null
-        and (($l | index("stage:build")) != null or ($l | index("stage:fix")) != null)')
-    [ "$active" = true ] || close_team "$issue"
-  done
-}
-
-due() {
-  local stamp="$HOME_F/last-$1" last
-  last=$(cat "$stamp" 2>/dev/null || echo 0)
-  [ $(($(date +%s) - last)) -ge "$2" ] || return 1
-  [ -n "$DRY" ] || date +%s >"$stamp"
 }
 
 tick() {
   [ -n "$DRY" ] || "$CLAIM" reap
   running_jobs >/dev/null
   watchdog
+  reap_herdr_jobs
   close_finished_teams
 
   local role issue
@@ -253,10 +222,12 @@ tick() {
 
   "$ROOT/scripts/factory/release.sh" merge
   if due release "$RELEASE_EVERY"; then "$ROOT/scripts/factory/release.sh" cut; fi
-  if ! role_running janitor && due janitor "$JANITOR_EVERY"; then spawn_job janitor; fi
-  if ! role_running scout; then
-    local backlog=$(($(count_label stage:spec) + $(count_label stage:verify) + $(count_label stage:plan)))
-    if [ "$backlog" -lt "$SCOUT_BACKLOG" ] && due scout "$SCOUT_EVERY"; then spawn_job scout; fi
+  interval_role janitor "$JANITOR_EVERY"
+  local backlog=$(($(count_label stage:spec) + $(count_label stage:verify) + $(count_label stage:plan)))
+  if [ "$backlog" -lt "$SCOUT_BACKLOG" ]; then
+    interval_role scout "$SCOUT_EVERY"
+  elif is_resident scout; then
+    ensure_resident scout
   fi
 }
 
