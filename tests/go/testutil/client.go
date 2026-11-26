@@ -70,7 +70,7 @@ func StartArgsEnv(t *testing.T, extraEnv []string, extraArgs ...string) *Emulato
 		extraEnv = append(extraEnv, "GOCOVERDIR="+dir)
 		// SIGKILL loses coverage data; interrupt lets the binary flush it.
 		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
-		cmd.WaitDelay = 5 * time.Second
+		cmd.WaitDelay = 10 * time.Second
 	}
 	if len(extraEnv) > 0 {
 		cmd.Env = append(os.Environ(), extraEnv...)
