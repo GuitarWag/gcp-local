@@ -50,3 +50,17 @@ func (s *Service) apiSpanner(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, s.opts.Spanner.ConsoleStatus())
 }
+
+func (s *Service) pageGemini(w http.ResponseWriter, _ *http.Request) {
+	s.render(w, "stubservice.html", "Gemini", "gemini", map[string]any{
+		"PageScript": template.JS("window.__consoleBasePath = 'gemini';" + stubPageJS),
+	})
+}
+
+func (s *Service) apiGemini(w http.ResponseWriter, r *http.Request) {
+	if !strings.HasSuffix(r.URL.Path, "/status") {
+		http.NotFound(w, r)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.opts.Gemini.ConsoleStatus())
+}

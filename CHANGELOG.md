@@ -8,6 +8,32 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-26
+
+### Added
+
+- **Gemini API emulator.** The gateway now serves the Gemini API
+  (`generativelanguage.googleapis.com`) at the real root paths
+  `/v1beta/models/*` (plus `v1` and `v1alpha`, which the real API serves
+  identically): `generateContent`, `streamGenerateContent` (SSE, also with
+  `?alt=sse`), `countTokens`, and models list/get. The engine is fully
+  config-driven: `services.gemini.models` entries carry the fixture
+  `reply`, how many SSE `chunks` streaming splits it into, optional
+  `latencyMs`, and an optional `countTokens` override (default: whitespace
+  word count of the reply). `failFirst` rules inject the first N calls per
+  model failing with a Gemini-shaped error body — 429 responses carry the
+  `google.rpc.RetryInfo` detail with `retryDelay`, so SDK retry loops and
+  backoff tests run against the emulator. Responses match the real wire
+  shape (`candidates[].content.parts[].text`, `finishReason` only on the
+  last streamed frame, `usageMetadata` with `promptTokenCount` /
+  `candidatesTokenCount` / `totalTokenCount`, `modelVersion`), and errors
+  render `{"error":{"code":N,"message":...,"status":...}}`. Auth accepts
+  `x-goog-api-key` or `?key=`; any key value works. The service holds no
+  state — it needs no `state.Store` namespace — and appears on the console
+  with a status card. Tested with wire-level Go tests and the real
+  `google-genai` Python SDK. No inference, embeddings, function calling,
+  files API, caching, or tuning — those are documented non-goals. Closes #38.
+
 ## [0.12.0] - 2026-11-26
 
 ### Added
@@ -601,7 +627,8 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.0
 [0.12.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.12.0
 [0.11.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.11.0
 [0.10.3]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.10.3

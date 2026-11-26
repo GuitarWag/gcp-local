@@ -81,6 +81,7 @@ flowchart TD
         MEMO["Memorystore (own port)"]
         BT["Bigtable (subset)"]
         SP["Spanner (subset)"]
+        GEM["Gemini (fixture)"]
     end
 
     subgraph COMPUTE["Compute and tasking"]
@@ -112,7 +113,8 @@ flowchart TD
 
 Every box maps to a row in the [Services](#services) table and a package
 under `internal/services/`. Bigtable and Spanner have working data paths;
-Dataflow, Vertex AI, and AlloyDB are not implemented. Cloud Functions shares the Cloud
+Gemini serves deterministic fixture replies (no inference); Dataflow,
+Vertex AI, and AlloyDB are not implemented. Cloud Functions shares the Cloud
 Run package, and IAM policies are served through the services'
 `:getIamPolicy` / `:setIamPolicy` verbs on top of a shared `internal/iam`
 store.
@@ -340,6 +342,19 @@ services:
   memorystore:
     enabled: false     # disabled by default — listens on its own redis port
     port: 6379
+
+  gemini:
+    models:
+      - name: gemini-2.0-flash   # served as models/gemini-2.0-flash
+        reply: "Hello from the fixture model"
+        chunks: 3                # streamGenerateContent splits reply into 3 SSE chunks
+        latencyMs: 0             # optional simulated latency
+        countTokens: 42          # optional override; default = word count of reply
+    failFirst:                   # error injection: first N calls per model fail
+      - model: gemini-2.0-flash
+        status: 429              # Gemini error body with RetryInfo retryDelay
+        count: 1
+        retryDelay: 5s
 ```
 
 ## Services
@@ -366,6 +381,7 @@ services:
 | IAM admin        | working (subset)  | `iam.googleapis.com` `projects.serviceAccounts` CRUD + `serviceAccounts.keys` create/list/delete with a fake base64 credentials JSON payload. |
 | Bigtable         | working (subset)  | Data plane: `MutateRow`, `MutateRows`, `ReadRows` (chunk streaming, row keys/ranges, `RowsLimit`, reversed scans), `SampleRowKeys`, `CheckAndMutateRow`, and the row-filter tree (Chain, Interleave, Condition, regex/range/limit/label filters). Admin: `CreateTable`, `ListTables`, `GetTable`, `DeleteTable`, `ModifyColumnFamilies`, `DropRowRange`. `ReadModifyWriteRow` and query/change-stream RPCs return `UNIMPLEMENTED`. |
 | Spanner          | working (subset)  | Databases via DatabaseAdmin (`CREATE/ALTER/DROP TABLE`), sessions, `ExecuteSql` (SELECT + DML), `Read` (point keys + ranges), `Commit` (all 5 mutation types), transactions (buffered DML/mutations, apply-or-discard on commit/rollback), streaming. Partitioned queries, interleaved tables, and indexes are not supported. |
+| Gemini           | fixture           | `/v1beta/models/*` (plus `v1`/`v1alpha`): `generateContent`, `streamGenerateContent` (SSE), `countTokens`, models list/get. Deterministic fixture replies, token counts, latency, and 429 error injection come from config (`services.gemini`). No inference, embeddings, function calling, files API, or tuning. Any API key is accepted. |
 | Dataflow         | not implemented   |                                                     |
 | Vertex AI        | not implemented   |                                                     |
 | AlloyDB          | not implemented   |                                                     |
@@ -537,6 +553,10 @@ matches it with these explicit gaps:
   resource) or proxy to an existing `backendUrl`. There is no container image
   support — bring your own binary.
 - Dataflow, Vertex AI, AlloyDB — not implemented.
+- Gemini serves deterministic fixture replies from config — no inference or
+  multimodal understanding, no function calling/tools, no embeddings
+  (`embedContent`), no files API, no caching, no model tuning, no Vertex AI
+  express mode. Auth accepts any API key; per-key enforcement is deferred.
 - Default state backend is `memory`, not `boltdb`.
 
 ## Related projects
