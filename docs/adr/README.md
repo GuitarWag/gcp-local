@@ -4,6 +4,7 @@
 
 | Record | Status | Date | Tags |
 |---|---|---|---|
+| [Autonomous agent factory: label state machine, no human gate](20261126-211742-autonomous-agent-factory-label-state-machine.md) | accepted | 2026-11-26 | process, factory |
 | [Spanner emulator: SQLite per database, buffered read-write transactions](20261126-162636-spanner-emulator-sqlite-per-database-buffered.md) | proposed | 2026-11-26 | spanner, engine |
 | [Adopt adrlog CLI for architecture decision records](20261125-231025-adopt-adrlog-cli-for-architecture-decision.md) | accepted | 2026-11-25 | process, documentation |
 
@@ -11,7 +12,9 @@
 
 ```mermaid
 graph TD
-  n0["Spanner emulator: SQLite per database, buffered read-write …"]
-  n1["Adopt adrlog CLI for architecture decision records"]
-  n0 --> n1
+  n0["Autonomous agent factory: label state machine, no human gate"]
+  n1["Spanner emulator: SQLite per database, buffered read-write …"]
+  n2["Adopt adrlog CLI for architecture decision records"]
+  n0 --> n2
+  n1 --> n2
 ```
