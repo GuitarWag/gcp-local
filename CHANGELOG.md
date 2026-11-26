@@ -8,6 +8,26 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-11-26
+
+### Changed
+
+- **README architecture overview.** Added a mermaid component diagram to
+  the README right after the "Why" section: gateway on one port (REST +
+  gRPC + h2c), the emulated services grouped by function, the shared
+  `state.Store` backends, and the embedded dashboard/console, plus the
+  three-language test harness feeding the same wire surface. Every service
+  box cross-checks against `internal/services/` and the README service
+  table — no stale claims. State wording is exact: most services share
+  `state.Store`, but BigQuery and Memorystore keep state in their own
+  engines, and `/admin/reset` clears only the namespaces listed in
+  `internal/gateway/gateway.go`. Also added a short pointer to the
+  software factory pipeline (`docs/factory.md`) and the decision record
+  index (`docs/adr/README.md`). Docs-only change, no service behaviour
+  touched.
+
+  Closes #44.
+
 ## [0.10.2] - 2026-11-25
 
 ### Added
@@ -525,7 +545,8 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.10.2...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.10.3...HEAD
+[0.10.3]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.10.3
 [0.10.2]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.10.2
 [0.10.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.10.1
 [0.10.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.10.0
