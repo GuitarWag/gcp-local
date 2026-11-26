@@ -8,6 +8,29 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-25
+
+### Added
+
+- **Spanner data path.** The Spanner emulator now speaks the real
+  `google.spanner.v1.Spanner` and `google.spanner.database.v1.DatabaseAdmin`
+  gRPC surfaces instead of a stub. Databases are provisioned with
+  `CreateDatabase` / `UpdateDatabaseDdl` (already-complete LROs, so client
+  libraries never need an Operations server) and stored as per-database
+  SQLite handles. The data path covers sessions with expiry,
+  `ExecuteSql` / `ExecuteStreamingSql` (SELECT plus DML with typed
+  parameters), `Read` / `StreamingRead` (point keys and key ranges),
+  `Commit` with all five mutation types (`Insert`, `Update`, `Replace`,
+  `InsertOrUpdate`, `Delete`), `BeginTransaction` / `Rollback`, and
+  `ExecuteBatchDml`. Spanner types map onto SQLite storage: `INT64` to
+  `INTEGER`, `FLOAT64` to `REAL`, `BOOL` to `INTEGER`, and
+  `STRING`/`BYTES`/`TIMESTAMP`/`DATE`/`NUMERIC`/arrays to `TEXT` (arrays
+  as JSON). Errors surface as Spanner-shaped gRPC statuses
+  (`NotFound`, `AlreadyExists`, `InvalidArgument`). Partitioned queries,
+  interleaved tables, and secondary indexes are not supported and return
+  `UNIMPLEMENTED` or a clear error. Tested against the real
+  `cloud.google.com/go/spanner` client library. Closes #3.
+
 ## [0.10.1] - 2026-11-25
 
 ### Changed
@@ -509,7 +532,8 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.10.1...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.11.0
 [0.10.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.10.1
 [0.10.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.10.0
 [0.9.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.9.0

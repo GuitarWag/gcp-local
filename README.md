@@ -295,7 +295,7 @@ services:
 | IAM policies     | working           | `:getIamPolicy` / `:setIamPolicy` / `:testIamPermissions` round-trip on Pub/Sub topics + subscriptions, Secret Manager secrets, KMS keyrings + keys, Cloud Tasks queues, Cloud Run services, Cloud Functions, and service accounts. GCS-shaped `GET/PUT /b/{bucket}/iam` for Cloud Storage buckets. No permission enforcement. |
 | IAM admin        | working (subset)  | `iam.googleapis.com` `projects.serviceAccounts` CRUD + `serviceAccounts.keys` create/list/delete with a fake base64 credentials JSON payload. |
 | Bigtable         | stub              | gRPC connection succeeds; data methods return `UNIMPLEMENTED`. |
-| Spanner          | stub              | `CreateSession` works; data methods return `UNIMPLEMENTED`. |
+| Spanner          | working (subset)  | Databases via DatabaseAdmin (`CREATE/ALTER/DROP TABLE`), sessions, `ExecuteSql` (SELECT + DML), `Read` (point keys + ranges), `Commit` (all 5 mutation types), transactions, streaming. Partitioned queries, interleaved tables, and indexes are not supported. |
 | Dataflow         | not implemented   |                                                     |
 | Vertex AI        | not implemented   |                                                     |
 | AlloyDB          | not implemented   |                                                     |
@@ -458,8 +458,11 @@ matches it with these explicit gaps:
   (pgproto3 + modernc.org/sqlite) and a `mysql` engine behind a MySQL wire
   shim (go-mysql-org/go-mysql + the same sqlite handle). The `postgres`
   engine (real pgembedded binary) is not implemented yet.
-- Bigtable and Spanner are gRPC stubs that return `UNIMPLEMENTED` for data
-  operations.
+- Bigtable is a gRPC stub that returns `UNIMPLEMENTED` for data operations.
+  Spanner has a data path backed by per-database SQLite: DDL via
+  DatabaseAdmin, sessions, `ExecuteSql`, `Read`, and all five mutation
+  types through `Commit`. Partitioned queries, interleaved tables, and
+  secondary indexes are not supported.
 - Cloud Run / Cloud Functions can spawn a local executable (`command:` on the
   resource) or proxy to an existing `backendUrl`. There is no container image
   support — bring your own binary.

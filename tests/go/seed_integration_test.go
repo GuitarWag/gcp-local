@@ -147,9 +147,10 @@ func TestSeedScriptDrivesAllConsoleEndpoints(t *testing.T) {
 		s, _ := v.(string)
 		return s == "stub"
 	})
+	// Spanner now has a data path: it reports "ready" instead of "stub".
 	expectField(t, em, "/console/api/spanner/status", "state", func(v any) bool {
 		s, _ := v.(string)
-		return s == "stub"
+		return s == "ready"
 	})
 }
 
