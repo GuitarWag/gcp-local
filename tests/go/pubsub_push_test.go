@@ -168,6 +168,7 @@ func TestPubSubPushRetryAfter503(t *testing.T) {
 	// After success, the message should not be redelivered or pullable.
 	pullURL := "http://" + em.Host + "/v1/projects/" + project + "/subscriptions/retry-sub:pull"
 	// Give the pusher a beat to ack and stop redelivering.
+	// ast-grep-ignore: no-bare-sleep-in-tests
 	time.Sleep(200 * time.Millisecond)
 	resp, body := doJSON(t, http.MethodPost, pullURL, map[string]any{"maxMessages": 10, "returnImmediately": true})
 	if resp.StatusCode != http.StatusOK {

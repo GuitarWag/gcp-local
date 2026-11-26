@@ -43,9 +43,9 @@ jobs:
           cache-dependency-path: |
             go.sum
             tests/go/go.sum
-      - name: go test -race
+      - name: go test -race -shuffle
         working-directory: tests/go
-        run: go test -race -count=1 ./...
+        run: go test -race -count=1 -shuffle=on ./...
 
   python-tests:
     name: Python integration tests
@@ -95,3 +95,71 @@ jobs:
       - name: vitest
         working-directory: tests/typescript
         run: pnpm test
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.15.0
+      - name: golangci-lint (new code only)
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.15.0
+          args: -c .golangci-new.yml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: ast-grep
+        run: |
+          npm install -g @ast-grep/cli@0.51.0
+          ast-grep scan
+
+  policy:
+    name: Policy
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: policy (script from main)
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BRANCH: ${{ github.head_ref }}
+        run: |
+          # Judge the PR with main's rules, so a PR cannot weaken them.
+          if git cat-file -e origin/main:scripts/ci/policy.sh 2>/dev/null; then
+            git show origin/main:scripts/ci/policy.sh > "$RUNNER_TEMP/policy.sh"
+          else
+            cp scripts/ci/policy.sh "$RUNNER_TEMP/policy.sh"
+          fi
+          bash "$RUNNER_TEMP/policy.sh" origin/main
+
+  coverage:
+    name: Coverage
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+          cache-dependency-path: |
+            go.sum
+            tests/go/go.sum
+      - name: coverage ratchet
+        run: scripts/ci/coverage.sh origin/main

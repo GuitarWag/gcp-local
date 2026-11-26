@@ -6,10 +6,10 @@ orchestrator starts you only when fewer than 5 issues wait in
 
 1. File at most 3 issues per run.
 2. Find gaps in this order:
-   1. **Missing methods in emulated services.** Compare the methods in
-      the real discovery document or protos with what the emulator
-      serves (see `README.md` "Services" and `internal/services/`).
-      Prefer the methods that the real SDKs call most often.
+   1. **Missing methods in emulated services.** Run
+      `cd tests/go && go run ./apicoverage`. It lists the real API
+      methods that the emulator does not route. Prefer the methods that
+      the real SDKs call most often. Group related methods into one issue.
    2. **Missing behaviour.** Real error codes, pagination, filters, IAM
       checks and LRO shapes that the emulator gets wrong or leaves out.
    3. **New services.** Use the discovery directory

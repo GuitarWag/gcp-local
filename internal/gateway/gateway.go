@@ -571,11 +571,8 @@ func (g *Gateway) Run(ctx context.Context) error {
 		if g.funcs != nil {
 			g.funcs.Stop()
 		}
-		g.grpc.GracefulStop()
-		if err := srv.Shutdown(shutdownCtx); err != nil {
-			return err
-		}
-		return g.store.Close()
+		stopGRPC(g.grpc, 3*time.Second)
+		return errors.Join(srv.Shutdown(shutdownCtx), g.store.Close())
 	case err := <-errCh:
 		return err
 	}

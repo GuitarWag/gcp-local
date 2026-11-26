@@ -45,6 +45,7 @@ func TestPubSubAckDeadlineExpiryRedelivers(t *testing.T) {
 	}
 
 	// don't ack; wait past ack deadline
+	// ast-grep-ignore: no-bare-sleep-in-tests
 	time.Sleep(1500 * time.Millisecond)
 
 	resp, body = doJSON(t, http.MethodPost, base+"/subscriptions/redeliver-sub:pull",
@@ -142,6 +143,7 @@ func TestPubSubAckedMessageDoesNotRedeliver(t *testing.T) {
 		t.Fatalf("ack")
 	}
 
+	// ast-grep-ignore: no-bare-sleep-in-tests
 	time.Sleep(1500 * time.Millisecond)
 	_, body = doJSON(t, http.MethodPost, base+"/subscriptions/ack-sub:pull",
 		map[string]any{"maxMessages": 10, "returnImmediately": true})

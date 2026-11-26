@@ -174,6 +174,7 @@ func TestOTLPDisabledByDefault(t *testing.T) {
 	// any non-zero body count below proves a regression rather than a
 	// timing race. The wait just gives the (non-existent) batcher a
 	// chance to misbehave.
+	// ast-grep-ignore: no-bare-sleep-in-tests
 	time.Sleep(1500 * time.Millisecond)
 	if n := rec.bodyCount(); n != 0 {
 		t.Fatalf("expected zero OTLP exports with tracing disabled, got %d", n)

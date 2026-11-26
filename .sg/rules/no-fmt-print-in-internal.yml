@@ -1,0 +1,16 @@
+id: no-fmt-print-in-internal
+language: go
+severity: error
+message: Use the observability logger, not fmt.Print to stdout.
+files: ["internal/**"]
+rule:
+  any:
+    - pattern:
+        context: 'func f() { fmt.Print($$$) }'
+        selector: call_expression
+    - pattern:
+        context: 'func f() { fmt.Println($$$) }'
+        selector: call_expression
+    - pattern:
+        context: 'func f() { fmt.Printf($$$) }'
+        selector: call_expression

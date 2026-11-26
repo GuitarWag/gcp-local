@@ -1,0 +1,9 @@
+id: no-http-error-in-services
+language: go
+severity: error
+message: Use httpresp.Err so the client gets the GCP error shape {"error":{"code","message"}}.
+files: ["internal/services/**"]
+rule:
+  pattern:
+    context: 'func f() { http.Error($$$) }'
+    selector: call_expression

@@ -1,0 +1,9 @@
+id: no-panic-in-internal
+language: go
+severity: error
+message: Return an error or a GCP error response. A panic kills the emulator for every client.
+files: ["internal/**"]
+rule:
+  pattern:
+    context: 'func f() { panic($$$) }'
+    selector: call_expression

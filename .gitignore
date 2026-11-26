@@ -28,6 +28,7 @@ tests/typescript/.vite/
 !.claude/
 .claude/*
 !.claude/skills
+!.sg/
 
 # Also ignore stray dotfiles produced by tooling.
 ruvector.db

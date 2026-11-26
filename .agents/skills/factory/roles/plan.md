@@ -21,9 +21,12 @@ and one plan comment.
      id=$(gh api repos/GuitarWag/gcp-local/issues/<sub> -q .id)
      gh api -X POST repos/GuitarWag/gcp-local/issues/<issue>/sub_issues -F sub_issue_id="$id"
      ```
-6. Pick the team size: the largest number of subtasks that can run at the
+6. CI fails a PR with more than 1500 changed lines. If the feature is
+   larger, keep the first part in this issue. File the rest as new issues
+   with `stage:spec` and a link to this issue.
+7. Pick the team size: the largest number of subtasks that can run at the
    same time, from 2 to 6.
-7. Post a comment that starts with
+8. Post a comment that starts with
    `<!-- factory:plan team=<N> branch=factory/<issue> -->`. List the
    subtasks in order, with their waves of parallel work.
-8. Run `claim.sh advance <issue> stage:plan stage:build`.
+9. Run `claim.sh advance <issue> stage:plan stage:build`.

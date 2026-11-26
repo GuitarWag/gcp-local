@@ -1,0 +1,13 @@
+id: no-bare-sleep-in-tests
+language: go
+severity: error
+message: A fixed sleep makes the test slow and flaky. Poll the condition in a loop with a deadline.
+files: ["tests/go/**"]
+rule:
+  pattern:
+    context: 'func f() { time.Sleep($$$) }'
+    selector: call_expression
+  not:
+    inside:
+      kind: for_statement
+      stopBy: end

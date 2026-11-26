@@ -1,0 +1,28 @@
+id: no-disk-write-in-services
+language: go
+severity: error
+message: Services keep state through state.Store, never raw disk.
+files: ["internal/services/**"]
+rule:
+  any:
+    - pattern:
+        context: 'func f() { os.WriteFile($$$) }'
+        selector: call_expression
+    - pattern:
+        context: 'func f() { os.Create($$$) }'
+        selector: call_expression
+    - pattern:
+        context: 'func f() { os.OpenFile($$$) }'
+        selector: call_expression
+    - pattern:
+        context: 'func f() { os.MkdirAll($$$) }'
+        selector: call_expression
+    - pattern:
+        context: 'func f() { os.Remove($$$) }'
+        selector: call_expression
+    - pattern:
+        context: 'func f() { os.RemoveAll($$$) }'
+        selector: call_expression
+    - pattern:
+        context: 'func f() { os.Rename($$$) }'
+        selector: call_expression

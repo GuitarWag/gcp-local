@@ -63,26 +63,52 @@ session.
 
 Tests are integration-only (no unit tests). Race detector should stay clean.
 
-### Pre-push gate (run all six, no shortcuts)
+### Pre-push gate
 
-Run the full gate locally before every `git push`. CI catches things, but
-catching them locally is the whole point of having a three-language harness.
+Run the gate before every `git push`. It runs every check that CI runs
+and lists all failures at the end:
 
 ```bash
-go vet ./...
-gofmt -l internal/ cmd/                # must print nothing
-golangci-lint run ./...                # config in .golangci.yml
-(cd tests/go && go test -race -count=1 ./...)
-(cd tests/python && .venv/bin/python -m pytest -q)
-(cd tests/typescript && pnpm test)
+scripts/ci/gate.sh            # vet, gofmt, golangci-lint (twice), ast-grep, policy, 3 test suites
+scripts/ci/gate.sh --cover    # also the coverage ratchet
 ```
 
-Install golangci-lint v2 once:
-`go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest`
+| Check | Config | What it blocks |
+|---|---|---|
+| golangci-lint | `.golangci.yml` | Bugs and unsafe code, in all code. |
+| golangci-lint (new code) | `.golangci-new.yml` | Copied code, long or complex functions, repeated literals and TODOs, in lines changed since `origin/main`. |
+| ast-grep | `.sg/rules/` | `http.Error` and disk writes in services, `panic` and `fmt.Print` in `internal/`, `time.Sleep` outside a loop in tests. |
+| policy | `scripts/ci/policy.sh` | Files over 500 lines, `CHANGELOG.md` edits, a missing fragment, a new dependency without an ADR, tests outside `tests/`, service changes without tests, more `//nolint` or skipped tests, guardrail changes mixed with code, diffs over 1500 lines. |
+| coverage | `scripts/ci/coverage.sh` | A drop of more than 2 points in any package, and new service packages under 60%. |
+| go test | `-race -shuffle=on` | Data races and tests that depend on run order. |
 
-If any step fails, fix it and re-run the whole gate. Don't push partial.
-Don't trust CI to be the first signal — by the time CI fails, you've
-already shipped the breakage to `main`.
+CI runs the copy of `policy.sh` from `main`, not the copy in the PR.
+
+When a check fails, fix the cause. Do not add `//nolint`, `ast-grep-ignore`,
+a skipped test or a lint exclusion: the policy check blocks each of them.
+A PR that changes a guardrail file (`.golangci*.yml`, `sgconfig.yml`,
+`.sg/`, `scripts/ci/`, `.github/workflows/`) must not change code.
+
+Install once: golangci-lint v2, ast-grep
+(`npm install -g @ast-grep/cli`), the Python venv and `pnpm install`
+(see Tests).
+
+## Slop
+
+Reviews reject these patterns:
+
+- A new helper when one exists. Look first in `internal/httpresp`
+  (JSON and GCP errors), `internal/state` (all storage), `internal/health`,
+  `internal/iam`, and `tests/go/testutil` (start the emulator, clients).
+- Comments that repeat the code. Comment only the reason for a decision.
+- Config options, flags, interfaces or wrappers that no caller needs now.
+- Tests that pass without the change, or that check only status codes
+  when the real SDK checks the body.
+- Error messages or JSON shapes that differ from the real API. Copy them
+  from the discovery document or the protos.
+
+`cd tests/go && go run ./apicoverage` reports which real API methods the
+emulator serves.
 
 ## CHANGELOG and releases
 

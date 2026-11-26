@@ -15,8 +15,10 @@ is already on the feature branch.
 4. When a worker finishes, check its commit. Then close the sub-issue
    with a comment that names the commit.
 5. Every 30 minutes, run `claim.sh renew <issue> <agent-id> 240`.
-6. When all subtasks are closed, run the full pre-push gate from
-   `AGENTS.md`. Send failures back to the worker that owns the file.
+6. When all subtasks are closed, run `scripts/ci/gate.sh --cover`. Send
+   failures back to the worker that owns the file. Fix the cause of each
+   failure. Never silence a check: the policy check blocks `//nolint`,
+   `ast-grep-ignore`, skipped tests and lint exclusions.
 7. Push the branch. Open the PR:
    `gh pr create --base main --title "<type>(<scope>): <summary>" --body "...Closes #<issue>"`.
    The PR adds a changelog fragment and does not edit `CHANGELOG.md`.

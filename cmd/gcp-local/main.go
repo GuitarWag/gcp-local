@@ -166,6 +166,7 @@ func runStart(args []string) error {
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sigCh
+		flushCoverage()
 		cancel()
 	}()
 
