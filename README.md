@@ -51,6 +51,76 @@ dashboard.
 
 ---
 
+## Architecture overview
+
+One binary, one port. The gateway speaks REST and gRPC on the same listener
+(h2c by default, real HTTP/2 over TLS with `--tls`), and routes requests to
+services by `/v1/`, `/v2/`, and `/v3/` path prefixes. Most services read and
+write state through one shared `state.Store` — in-memory by default, or a
+BoltDB file. BigQuery and Memorystore keep state in their own engines;
+`/admin/reset` clears only the `state.Store` namespaces listed in
+`internal/gateway/gateway.go`. The dashboard and console are embedded HTML
+served from the same port.
+
+```mermaid
+flowchart TD
+    SDK["Your SDK code — Go / Python / TypeScript"] --> GW
+    TESTS["Integration tests — real GCP client libraries"] --> GW
+    GW["Gateway — one port: REST + gRPC + h2c"]
+    GW --> DATA
+    GW --> COMPUTE
+    GW --> SECOPS
+    GW --> UI["Dashboard + Console — embedded HTML, same port"]
+
+    subgraph DATA["Data and messaging"]
+        direction LR
+        STORAGE["Cloud Storage"]
+        PUBSUB["Pub/Sub"]
+        FIRESTORE["Firestore"]
+        BIGQUERY["BigQuery"]
+        MEMO["Memorystore (own port)"]
+        BT["Bigtable (stub)"]
+        SP["Spanner (stub)"]
+    end
+
+    subgraph COMPUTE["Compute and tasking"]
+        direction LR
+        RUN["Cloud Run"]
+        FUNC["Cloud Functions"]
+        SQL["CloudSQL"]
+        TASKS["Cloud Tasks"]
+        SCHED["Cloud Scheduler"]
+    end
+
+    subgraph SECOPS["Security and observability"]
+        direction LR
+        SM["Secret Manager"]
+        KMS["KMS"]
+        LOG["Cloud Logging"]
+        MON["Cloud Monitoring"]
+        META["Metadata server"]
+        IAMC["IAM credentials"]
+        IAMA["IAM admin"]
+        IAMP["IAM policies"]
+    end
+
+    DATA --> STORE
+    COMPUTE --> STORE
+    SECOPS --> STORE
+    STORE["state.Store — memory (default) or BoltDB"]
+```
+
+Every box maps to a row in the [Services](#services) table and a package
+under `internal/services/`. Bigtable and Spanner are gRPC stubs; Dataflow,
+Vertex AI, and AlloyDB are not implemented. Cloud Functions shares the Cloud
+Run package, and IAM policies are served through the services'
+`:getIamPolicy` / `:setIamPolicy` verbs on top of a shared `internal/iam`
+store.
+
+The pipeline that builds and reviews this repo is described in
+[docs/factory.md](docs/factory.md), and architecture decisions are recorded
+in [docs/adr/README.md](docs/adr/README.md).
+
 ## Use cases
 
 ### 1. Local development without burning GCP credits
