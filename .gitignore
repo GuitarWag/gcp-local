@@ -33,3 +33,8 @@ tests/typescript/.vite/
 # Also ignore stray dotfiles produced by tooling.
 ruvector.db
 .mcp.json
+
+# Holdout programs written by the accept agent; never commit them.
+tests/go/zz_holdout_*
+tests/python/test_zz_holdout_*
+tests/typescript/zz_holdout_*

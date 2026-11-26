@@ -37,4 +37,16 @@ Input: one issue with `stage:spec`. Output: one spec comment on the issue.
    https://fizzbee.io/design/tutorials/getting-started/
 6. Use `model-check: skip` only for stateless or strictly sequential
    features, for example a fixture reply or a read-only list.
-7. Run `scripts/factory/claim.sh advance <issue> stage:spec stage:verify`.
+7. Write the holdout scenarios in the holdout folder that your prompt
+   names, as `scenarios/<issue>/S<n>.md`. The format is in that folder's
+   `README.md`. Write 3 to 8 scenarios for each issue:
+   - Each scenario checks one behaviour that a real SDK user sees, with a
+     real SDK call. Mix Go, Python and TypeScript when the SDKs differ.
+   - Cover the acceptance criteria from a different angle than the
+     **Tests** section of the public spec. Include at least one error
+     case with the real GCP error code.
+   - Mark the core acceptance criteria `P0`.
+   Commit and push them to the holdout repo (`git pull --rebase` first).
+   Never put scenario text in the public spec comment. Write only
+   `holdout: <N> scenarios` there.
+8. Run `scripts/factory/claim.sh advance <issue> stage:spec stage:verify`.
