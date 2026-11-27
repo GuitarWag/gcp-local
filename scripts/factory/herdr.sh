@@ -52,8 +52,9 @@ open_agent_tab() {
     pi) cmd="pi --approve ${model:+--model $model }\"\$(cat '$promptf')\"" ;;
     opencode)
       cmd="opencode --auto --session $ses --prompt \"\$(cat '$promptf')\""
-      [ -z "$OC_MODEL" ] ||
-        cmd="opencode run --auto -m $OC_MODEL --session $ses 'Reply with the word ready.' && $cmd"
+      model=${model:-$OC_MODEL}
+      [ -z "$model" ] ||
+        cmd="opencode run --auto -m $model --session $ses 'Reply with the word ready.' && $cmd"
       ;;
     *) log "herdr: unknown agent $agent"; return 1 ;;
   esac
@@ -69,10 +70,9 @@ start_herdr_job() {
     prompt_for "$role" "$issue" "$id" "$wt" "$holdout"
     printf '\n%s' "When the role is done, write DONE and wait."
   } >"$promptf"
-  [ "$agent" = opencode ] && [ -n "$model" ] && log "herdr: opencode takes no model; ignoring $model"
-  pane=$(open_agent_tab "$role-$issue" "$wt" "$agent" "$promptf" "$([ "$agent" = pi ] && echo "$model")") || return 1
+  pane=$(open_agent_tab "$role-$issue" "$wt" "$agent" "$promptf" "$model") || return 1
   printf '%s %s\n' "$pane" "$issue" >"$HOME_F/run/$id.herdr"
-  log "start $role #$issue with $agent in herdr tab $role-$issue (pane $pane)"
+  log "start $role #$issue with $agent${model:+ ($model)} in herdr tab $role-$issue (pane $pane)"
 }
 
 # Removes a finished herdr job. With "fail", it records a failed attempt.
@@ -108,7 +108,11 @@ reap_herdr_jobs() {
     else
       hf="$HOME_F/run/$id.screen"
       h=$(screen_hash "$pane")
-      if [ "$h" != "$(cat "$hf" 2>/dev/null)" ]; then echo "$h" >"$hf"; fi
+      # A job that makes progress keeps its claim; the watchdog ends the rest.
+      if [ "$h" != "$(cat "$hf" 2>/dev/null)" ]; then
+        echo "$h" >"$hf"
+        [ -n "$DRY" ] || "$CLAIM" renew "$issue" "$id" "$JOB_LEASE" >/dev/null 2>&1
+      fi
       idle=$(((now - $(mtime "$hf")) / 60))
       age=$(((now - $(mtime "$f")) / 60))
       if [ "$idle" -ge "$STALL_MIN" ] || [ "$age" -ge "$JOB_MAX_MIN" ]; then

@@ -15,6 +15,7 @@ HOME_F=${FACTORY_HOME:-$HOME/.factory}
 TICK=${FACTORY_TICK:-300}
 MAX_JOBS=${FACTORY_MAX_JOBS:-3}
 MAX_TEAMS=${FACTORY_MAX_TEAMS:-2}
+# Entries are "agent" or "agent:provider/model"; jobs take them in turn.
 AGENTS=${FACTORY_AGENTS:-"pi opencode"}
 # A reviewer from another model family catches what the builders miss.
 REVIEW_AGENT=${FACTORY_REVIEW_AGENT:-}
@@ -137,12 +138,13 @@ Your holdout folder is $holdout (a clone of the private repo $HOLDOUT_REPO). Nev
 spawn_job() {
   local role=$1 issue=${2:-} agent id wt logf model= holdout=
   agent=$(pick_agent)
+  case $agent in *:*) model=${agent#*:} agent=${agent%%:*} ;; esac
   if [ "$role" = review ]; then
     agent=${REVIEW_AGENT:-$agent}
-    model=$REVIEW_MODEL
+    model=${REVIEW_MODEL:-$model}
   fi
   id="$role-${issue:-x}-$agent-$(date +%s)"
-  if [ -n "$DRY" ]; then log "dry-run: start $role ${issue:+#$issue }with $agent"; return; fi
+  if [ -n "$DRY" ]; then log "dry-run: start $role ${issue:+#$issue }with $agent${model:+ ($model)}"; return; fi
   if [ -n "$issue" ]; then "$CLAIM" claim "$issue" "$id" "$JOB_LEASE" || return; fi
   wt="$HOME_F/wt/$id"
   logf="$HOME_F/logs/$id.log"
@@ -168,7 +170,7 @@ spawn_job() {
     }
     return
   fi
-  log "start $role ${issue:+#$issue }with $agent (log: $logf)"
+  log "start $role ${issue:+#$issue }with $agent${model:+ ($model)} (log: $logf)"
   (
     cd "$wt" && run_agent "$agent" "$(prompt_for "$role" "$issue" "$id" "$wt" "$holdout")" "$model" >"$logf" 2>&1
     log "end $role ${issue:+#$issue }exit=$?" >>"$logf"
@@ -209,7 +211,8 @@ tick() {
   close_finished_teams
 
   local role issue
-  for role in spec verify plan review accept; do
+  # Latest stage first: work near merge finishes before new work starts.
+  for role in accept review plan verify spec; do
     for issue in $(issues_in "$role"); do
       [ "$(running_jobs)" -lt "$MAX_JOBS" ] || break 2
       spawn_job "$role" "$issue"
