@@ -45,7 +45,7 @@ Other processes:
 
 | Process | Interval | Job |
 |---|---|---|
-| `orchestrator.sh` | every 5 minutes | Reaps expired claims, starts agents and teams, closes finished team tabs, runs the release script. |
+| `orchestrator.sh` | every 5 minutes | Reaps expired claims, starts agents and teams, closes finished team tabs, nudges the boss of a team that is idle for 10 minutes, runs the release script. |
 | `release.sh cut` | every hour | Folds `changelog.d/` into `CHANGELOG.md` and opens a `release/vX.Y.Z` PR. The next tick merges it when CI is green, and `auto-tag.yml` publishes. |
 | janitor agent | every hour | Removes dead worktrees, branches and herdr tabs. Fixes labels. Resets flagged issues once, closes them on the second flag. Files issues for code and docs drift. |
 | scout agent | every 24 hours | Files at most 3 new feature issues, only when fewer than 5 issues wait in spec, verify and plan. |
@@ -148,7 +148,8 @@ dead worktrees, are the janitor's job.
 | Limit | Default | Variable |
 |---|---|---|
 | Ephemeral jobs at the same time | 3 | `FACTORY_MAX_JOBS` |
-| herdr teams at the same time | 2 | `FACTORY_MAX_TEAMS` |
+| herdr teams at the same time | 6 | `FACTORY_MAX_TEAMS` |
+| Minutes a whole team is idle before the orchestrator nudges the boss | 10 | `FACTORY_TEAM_IDLE` |
 | Review rounds before flag | 3 | (review role) |
 | Failed attempts before flag | 3 | `FACTORY_MAX_FAILS` |
 | Scout issues per run | 3 | (scout role) |
