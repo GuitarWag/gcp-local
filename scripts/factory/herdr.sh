@@ -53,7 +53,7 @@ open_agent_tab() {
   [ -n "$pane" ] || { log "herdr: tab create failed for $label"; return 1; }
   hjson pane rename "$pane" "$label" >/dev/null
   case $agent in
-    pi) cmd="pi ${model:+--model $model }\"\$(cat '$promptf')\"" ;;
+    pi) cmd="pi --approve ${model:+--model $model }\"\$(cat '$promptf')\"" ;;
     opencode) cmd="${OPENCODE_CONFIG:+OPENCODE_CONFIG='$OPENCODE_CONFIG' }opencode --auto --prompt \"\$(cat '$promptf')\"" ;;
     *) log "herdr: unknown agent $agent"; return 1 ;;
   esac
