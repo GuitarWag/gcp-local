@@ -29,7 +29,10 @@ const (
 	statusFailedPrecond   = "FAILED_PRECONDITION"
 	statusInternal        = "INTERNAL"
 
-	respTypePrefix = "type.googleapis.com/google.api.serviceusage.v1."
+	respTypePrefix    = "type.googleapis.com/google.api.serviceusage.v1."
+	servicesSegment   = "services"
+	fieldResponseType = "@type"
+	fieldName         = "name"
 )
 
 const errServiceNotFound = "Service %s not found."
@@ -91,13 +94,13 @@ func (s *Service) HandleV1(w http.ResponseWriter, r *http.Request, parts []strin
 			s.handleBatchEnable(w, r, parts[1])
 			return true
 		}
-		if parts[2] == "services" && r.Method == http.MethodGet {
+		if parts[2] == servicesSegment && r.Method == http.MethodGet {
 			s.handleList(w, r, parts[1])
 			return true
 		}
 		return false
 	case 4:
-		if parts[2] != "services" {
+		if parts[2] != servicesSegment {
 			return false
 		}
 		switch r.Method {
@@ -192,7 +195,7 @@ func (s *Service) handleList(w http.ResponseWriter, r *http.Request, project str
 			next = strconv.Itoa(end)
 		}
 	}
-	resp := map[string]any{"services": page}
+	resp := map[string]any{servicesSegment: page}
 	if next != "" {
 		resp["nextPageToken"] = next
 	}
@@ -216,8 +219,8 @@ func (s *Service) handleEnable(w http.ResponseWriter, _ *http.Request, project, 
 	}
 	s.putServiceState(project, service, stateEnabled)
 	s.writeOperation(w, map[string]any{
-		"@type":   respTypePrefix + "EnableServiceResponse",
-		"service": s.serviceResource(project, entry, stateEnabled),
+		fieldResponseType: respTypePrefix + "EnableServiceResponse",
+		"service":         s.serviceResource(project, entry, stateEnabled),
 	})
 }
 
@@ -233,14 +236,14 @@ func (s *Service) handleDisable(w http.ResponseWriter, _ *http.Request, project,
 	}
 	s.putServiceState(project, service, stateDisabled)
 	s.writeOperation(w, map[string]any{
-		"@type":   respTypePrefix + "DisableServiceResponse",
-		"service": s.serviceResource(project, entry, stateDisabled),
+		fieldResponseType: respTypePrefix + "DisableServiceResponse",
+		"service":         s.serviceResource(project, entry, stateDisabled),
 	})
 }
 
 func (s *Service) handleBatchEnable(w http.ResponseWriter, r *http.Request, project string) {
 	var body struct {
-		ServiceIds []string `json:"serviceIds"`
+		ServiceIDs []string `json:"serviceIds"`
 	}
 	if r.ContentLength > 0 {
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -248,12 +251,12 @@ func (s *Service) handleBatchEnable(w http.ResponseWriter, r *http.Request, proj
 			return
 		}
 	}
-	if len(body.ServiceIds) > 20 {
+	if len(body.ServiceIDs) > 20 {
 		writeGCPError(w, http.StatusBadRequest, statusInvalidArgument, "batchEnable supports up to 20 services.")
 		return
 	}
-	entries := make([]catalogEntry, 0, len(body.ServiceIds))
-	for _, id := range body.ServiceIds {
+	entries := make([]catalogEntry, 0, len(body.ServiceIDs))
+	for _, id := range body.ServiceIDs {
 		entry, ok := catalogLookup(id)
 		if !ok {
 			writeGCPError(w, http.StatusNotFound, statusNotFound, fmt.Sprintf(errServiceNotFound, id))
@@ -267,8 +270,8 @@ func (s *Service) handleBatchEnable(w http.ResponseWriter, r *http.Request, proj
 		resources = append(resources, s.serviceResource(project, entry, stateEnabled))
 	}
 	s.writeOperation(w, map[string]any{
-		"@type":    respTypePrefix + "BatchEnableServicesResponse",
-		"services": resources,
+		fieldResponseType: respTypePrefix + "BatchEnableServicesResponse",
+		servicesSegment:   resources,
 	})
 }
 
@@ -276,7 +279,7 @@ func (s *Service) handleBatchEnable(w http.ResponseWriter, r *http.Request, proj
 func (s *Service) writeOperation(w http.ResponseWriter, resp any) {
 	id := strconv.FormatUint(s.opSeq.Add(1), 10)
 	op := map[string]any{
-		"name":     "operations/" + id,
+		fieldName:  "operations/" + id,
 		"done":     true,
 		"response": resp,
 	}
@@ -327,12 +330,12 @@ func (s *Service) putServiceState(project, service, stateStr string) {
 
 func (s *Service) serviceResource(project string, entry catalogEntry, stateStr string) map[string]any {
 	return map[string]any{
-		"name":   serviceKey(project, entry.Name),
-		"parent": fmt.Sprintf("projects/%s", project),
-		"state":  stateStr,
+		fieldName: serviceKey(project, entry.Name),
+		"parent":  fmt.Sprintf("projects/%s", project),
+		"state":   stateStr,
 		"config": map[string]any{
-			"name":  entry.Name,
-			"title": entry.Title,
+			fieldName: entry.Name,
+			"title":   entry.Title,
 		},
 	}
 }
