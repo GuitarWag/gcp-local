@@ -43,7 +43,9 @@ in herdr and wants to chat with the long-running ones.
    between ticks for herdr jobs.
 7. The factory pins the opencode model with `OPENCODE_CONFIG`, because a
    fresh interactive opencode picked a recently used model that had no
-   valid credentials.
+   valid credentials. Amended 2026-11-27: opencode v2 ignores
+   `OPENCODE_CONFIG`. The factory now creates the session with
+   `opencode run -m <model>` and opens the TUI on that session.
 8. The default runner stays `headless` until the herdr runner has run
    for some time.
 

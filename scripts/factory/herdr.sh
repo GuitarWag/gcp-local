@@ -6,15 +6,10 @@
 
 SPACE_LABEL=${FACTORY_SPACE:-factory}
 
-# A fresh interactive opencode can pick a recently used model instead of the
-# configured one. A factory config pins the model for every factory agent.
-OC_MODEL=${FACTORY_OPENCODE_MODEL:-$(jq -r '.model // empty' "$HOME/.config/opencode/opencode.json" 2>/dev/null)}
-OC_CONFIG="$HOME_F/opencode.json"
-if [ -n "$OC_MODEL" ]; then
-  printf '{"model":"%s","agent":{"build":{"model":"%s"},"plan":{"model":"%s"}}}\n' \
-    "$OC_MODEL" "$OC_MODEL" "$OC_MODEL" >"$OC_CONFIG"
-  export OPENCODE_CONFIG=$OC_CONFIG
-fi
+# The opencode v2 TUI ignores the configured model and has no model flag.
+# A session that "opencode run -m" creates keeps its model in the TUI.
+OC_MODEL=${FACTORY_OPENCODE_MODEL:-$(jq -r '.model | if type == "object" then "\(.providerID)/\(.model)" else . end // empty' \
+  "$HOME/.config/opencode/opencode.json" 2>/dev/null)}
 
 hjson() { herdr "$@" 2>/dev/null; }
 
@@ -45,7 +40,8 @@ pane_say() { hjson pane send-text "$1" "$2" >/dev/null && hjson pane send-keys "
 # Opens a tab in the factory space and starts an interactive agent with the
 # prompt in a file. Prints the pane id.
 open_agent_tab() {
-  local label=$1 cwd=$2 agent=$3 promptf=$4 model=${5:-} space pane cmd
+  local label=$1 cwd=$2 agent=$3 promptf=$4 model=${5:-} space pane cmd ses
+  ses="ses_factory$(date +%s)$(printf '%s' "$label" | tr -cd 'a-z0-9')"
   space=$(space_id)
   [ -n "$space" ] || { log "herdr: no factory workspace"; return 1; }
   pane=$(hjson tab create --workspace "$space" --label "$label" --cwd "$cwd" --no-focus |
@@ -54,7 +50,11 @@ open_agent_tab() {
   hjson pane rename "$pane" "$label" >/dev/null
   case $agent in
     pi) cmd="pi --approve ${model:+--model $model }\"\$(cat '$promptf')\"" ;;
-    opencode) cmd="${OPENCODE_CONFIG:+OPENCODE_CONFIG='$OPENCODE_CONFIG' }opencode --auto --prompt \"\$(cat '$promptf')\"" ;;
+    opencode)
+      cmd="opencode --auto --session $ses --prompt \"\$(cat '$promptf')\""
+      [ -z "$OC_MODEL" ] ||
+        cmd="opencode run --auto -m $OC_MODEL --session $ses 'Reply with the word ready.' && $cmd"
+      ;;
     *) log "herdr: unknown agent $agent"; return 1 ;;
   esac
   pane_say "$pane" "$cmd" || return 1

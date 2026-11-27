@@ -112,12 +112,16 @@ herdr-shepherd opens a team tab in the focused workspace, so the
 orchestrator focuses the factory space for the launch and then gives focus
 back. Stage job tabs and resident tabs open with `--no-focus`.
 
-A fresh interactive opencode can pick a recently used model, not the
-configured one. The orchestrator writes `~/.factory/opencode.json` with
-the model from `~/.config/opencode/opencode.json` (or
-`FACTORY_OPENCODE_MODEL`) and starts every factory opencode with
-`OPENCODE_CONFIG` set to it. Team agents from herdr-shepherd do not get
-this setting.
+The opencode v2 TUI ignores the configured model, ignores
+`OPENCODE_CONFIG` and has no model flag. A fresh TUI can pick a model with
+no valid credentials. So each factory opencode tab first runs
+`opencode run -m <model> --session <id>` with a short prompt, then opens
+the TUI on that session, which keeps the model. The model comes from
+`~/.config/opencode/opencode.json` or `FACTORY_OPENCODE_MODEL`. Team
+agents from herdr-shepherd do not get this setting.
+
+Every pi tab starts with `--approve`. Without it, interactive pi asks to
+trust each new worktree and the job waits.
 
 ## Watchdog
 
