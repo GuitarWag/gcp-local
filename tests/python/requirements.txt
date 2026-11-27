@@ -6,3 +6,4 @@ google-cloud-pubsub>=2.20
 google-auth>=2.20
 psycopg2-binary>=2.9
 mysql-connector-python>=8.0
+google-cloud-secret-manager>=2.20

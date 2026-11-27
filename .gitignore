@@ -38,3 +38,7 @@ ruvector.db
 tests/go/zz_holdout_*
 tests/python/test_zz_holdout_*
 tests/typescript/zz_holdout_*
+
+# Terraform test harness
+tests/terraform/.terraform/
+tests/terraform/terraform.tfstate*
