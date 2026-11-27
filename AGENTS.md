@@ -33,6 +33,9 @@ internal/
     cloudsql/         REST instance management
     memorystore/      miniredis (own port)
     cloudrun/         Used for both Cloud Run and Functions
+    metadata/         GCE-shaped metadata server
+    iamcredentials/   generateAccessToken / generateIdToken
+    iamadmin/         service accounts CRUD + keys
 tests/
   go/                 Integration tests, separate Go module
   python/             pytest + venv
