@@ -39,7 +39,7 @@ The harness sets one per emulated service, all on the emulator port:
 
 ```hcl
 provider "google" {
-  project = "local-project"
+  project = "test-project"
   region  = "us-central1"
 
   storage_custom_endpoint         = "http://localhost:<port>/storage/v1/"
