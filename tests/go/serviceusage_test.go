@@ -119,6 +119,49 @@ func TestServiceUsageListServices(t *testing.T) {
 	}
 }
 
+func TestServiceUsageListDefaultPageSize(t *testing.T) {
+	em := testutil.Start(t)
+	client := newSUClient(t, em)
+
+	it := client.ListServices(context.Background(), &serviceusagepb.ListServicesRequest{
+		Parent:   "projects/" + project,
+		PageSize: 0,
+	})
+	var got []*serviceusagepb.Service
+	for {
+		svc, err := it.Next()
+		if err != nil {
+			break
+		}
+		got = append(got, svc)
+	}
+	if len(got) != 19 {
+		t.Fatalf("pageSize=0: expected 19 services, got %d", len(got))
+	}
+	if tok := it.PageInfo().Token; tok != "" {
+		t.Errorf("pageSize=0: nextPageToken %q, want none", tok)
+	}
+}
+
+func TestServiceUsageListBadPageToken(t *testing.T) {
+	em := testutil.Start(t)
+	client := newSUClient(t, em)
+
+	it := client.ListServices(context.Background(), &serviceusagepb.ListServicesRequest{
+		Parent:    "projects/" + project,
+		PageToken: "999",
+	})
+	_, err := it.Next()
+	var apiErr *googleapi.Error
+	ok := errors.As(err, &apiErr)
+	if !ok {
+		t.Fatalf("stale pageToken: want googleapi.Error, got %v", err)
+	}
+	if apiErr.Code != 400 {
+		t.Errorf("stale pageToken: code %d, want 400", apiErr.Code)
+	}
+}
+
 func TestServiceUsageGetService(t *testing.T) {
 	em := testutil.Start(t)
 	client := newSUClient(t, em)
@@ -239,7 +282,14 @@ func TestServiceUsageBoltDBRestart(t *testing.T) {
 
 	em1 := startEmulator(t, cfgPath)
 	client1 := newSUClient(t, em1.Emulator)
-	suEnable(t, client1, "spanner.googleapis.com")
+	opEnable, err := client1.EnableService(context.Background(), &serviceusagepb.EnableServiceRequest{
+		Name: "projects/" + project + "/services/spanner.googleapis.com",
+	})
+	if err != nil {
+		t.Fatalf("enable: %v", err)
+	}
+	var enableResp serviceusagepb.EnableServiceResponse
+	suOperation(t, client1, opEnable.Name(), &enableResp)
 	op, err := client1.DisableService(context.Background(), &serviceusagepb.DisableServiceRequest{
 		Name: "projects/" + project + "/services/spanner.googleapis.com",
 	})
@@ -248,11 +298,33 @@ func TestServiceUsageBoltDBRestart(t *testing.T) {
 	}
 	var resp serviceusagepb.DisableServiceResponse
 	suOperation(t, client1, op.Name(), &resp)
+	seen := map[string]bool{opEnable.Name(): true, op.Name(): true}
 	stopEmulator(em1)
 
 	em2 := startEmulator(t, cfgPath)
 	client2 := newSUClient(t, em2.Emulator)
 	if got := suService(t, client2, "spanner.googleapis.com").GetState(); got != serviceusagepb.State_DISABLED {
 		t.Errorf("state after restart: %v, want DISABLED", got)
+	}
+
+	var reread serviceusagepb.DisableServiceResponse
+	suOperation(t, client2, op.Name(), &reread)
+	if !proto.Equal(&resp, &reread) {
+		t.Errorf("operation %s changed across restart", op.Name())
+	}
+
+	op3, err := client2.EnableService(context.Background(), &serviceusagepb.EnableServiceRequest{
+		Name: "projects/" + project + "/services/spanner.googleapis.com",
+	})
+	if err != nil {
+		t.Fatalf("enable after restart: %v", err)
+	}
+	if seen[op3.Name()] {
+		t.Errorf("operation id reused after restart: %s", op3.Name())
+	}
+	var resp3 serviceusagepb.EnableServiceResponse
+	suOperation(t, client2, op3.Name(), &resp3)
+	if resp3.GetService().GetState() != serviceusagepb.State_ENABLED {
+		t.Errorf("enable after restart: state %v, want ENABLED", resp3.GetService().GetState())
 	}
 }

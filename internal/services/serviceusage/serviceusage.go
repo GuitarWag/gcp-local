@@ -72,7 +72,18 @@ type Service struct {
 }
 
 func New(store state.Store, _ *config.Config) *Service {
-	return &Service{store: store}
+	s := &Service{store: store}
+	// Resume the counter so ids survive restarts.
+	var highest uint64
+	if all, err := store.List(nsOperations, ""); err == nil {
+		for k := range all {
+			if n, err := strconv.ParseUint(k, 10, 64); err == nil && n > highest {
+				highest = n
+			}
+		}
+	}
+	s.opSeq.Store(highest)
+	return s
 }
 
 func (s *Service) Name() string { return "serviceusage" }
@@ -160,7 +171,10 @@ func (s *Service) handleList(w http.ResponseWriter, r *http.Request, project str
 			writeGCPError(w, http.StatusBadRequest, statusInvalidArgument, fmt.Sprintf("Invalid pageSize: %q.", v))
 			return
 		}
-		pageSize = n
+		if n > 0 {
+			// pageSize=0 means unspecified, like the real API.
+			pageSize = n
+		}
 	}
 	offset := 0
 	if v := r.URL.Query().Get("pageToken"); v != "" {
@@ -185,6 +199,11 @@ func (s *Service) handleList(w http.ResponseWriter, r *http.Request, project str
 			continue
 		}
 		all = append(all, s.serviceResource(project, entry, st))
+	}
+	if offset > len(all) {
+		writeGCPError(w, http.StatusBadRequest, statusInvalidArgument,
+			fmt.Sprintf("Invalid pageToken: %q.", r.URL.Query().Get("pageToken")))
+		return
 	}
 	page := []map[string]any{}
 	next := ""
@@ -217,7 +236,10 @@ func (s *Service) handleEnable(w http.ResponseWriter, _ *http.Request, project, 
 		writeGCPError(w, http.StatusNotFound, statusNotFound, fmt.Sprintf(errServiceNotFound, service))
 		return
 	}
-	s.putServiceState(project, service, stateEnabled)
+	if err := s.putServiceState(project, service, stateEnabled); err != nil {
+		writeGCPError(w, http.StatusInternalServerError, statusInternal, err.Error())
+		return
+	}
 	s.writeOperation(w, map[string]any{
 		fieldResponseType: respTypePrefix + "EnableServiceResponse",
 		"service":         s.serviceResource(project, entry, stateEnabled),
@@ -234,7 +256,10 @@ func (s *Service) handleDisable(w http.ResponseWriter, _ *http.Request, project,
 		writeGCPError(w, http.StatusBadRequest, statusFailedPrecond, fmt.Sprintf("Service %s is not enabled.", service))
 		return
 	}
-	s.putServiceState(project, service, stateDisabled)
+	if err := s.putServiceState(project, service, stateDisabled); err != nil {
+		writeGCPError(w, http.StatusInternalServerError, statusInternal, err.Error())
+		return
+	}
 	s.writeOperation(w, map[string]any{
 		fieldResponseType: respTypePrefix + "DisableServiceResponse",
 		"service":         s.serviceResource(project, entry, stateDisabled),
@@ -266,7 +291,10 @@ func (s *Service) handleBatchEnable(w http.ResponseWriter, r *http.Request, proj
 	}
 	resources := make([]map[string]any, 0, len(entries))
 	for _, entry := range entries {
-		s.putServiceState(project, entry.Name, stateEnabled)
+		if err := s.putServiceState(project, entry.Name, stateEnabled); err != nil {
+			writeGCPError(w, http.StatusInternalServerError, statusInternal, err.Error())
+			return
+		}
 		resources = append(resources, s.serviceResource(project, entry, stateEnabled))
 	}
 	s.writeOperation(w, map[string]any{
@@ -323,9 +351,9 @@ func (s *Service) getServiceState(project, service string) string {
 	return rec.State
 }
 
-func (s *Service) putServiceState(project, service, stateStr string) {
+func (s *Service) putServiceState(project, service, stateStr string) error {
 	data, _ := json.Marshal(map[string]string{"state": stateStr})
-	_ = s.store.Put(nsServices, serviceKey(project, service), data)
+	return s.store.Put(nsServices, serviceKey(project, service), data)
 }
 
 func (s *Service) serviceResource(project string, entry catalogEntry, stateStr string) map[string]any {
