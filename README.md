@@ -29,6 +29,26 @@ clients will start hitting the local emulator. No code changes.
 
 ---
 
+## Contents
+
+- [Why](#why)
+- [Architecture overview](#architecture-overview)
+- [Use cases](#use-cases)
+- [Install](#install)
+- [Quickstart](#quickstart)
+- [Quick reference](#quick-reference)
+- [Config](#config)
+- [Services](#services)
+- [SDK compatibility](#sdk-compatibility)
+- [Using with `gcloud`](#using-with-gcloud)
+- [TLS](#tls)
+- [Tracing](#tracing)
+- [Architecture](#architecture)
+- [Tests](#tests)
+- [Divergences from the design spec](#divergences-from-the-design-spec)
+- [Related projects](#related-projects)
+- [License](#license)
+
 ## Why
 
 The official GCP emulators are a patchwork: Java images for Firestore and
@@ -254,7 +274,11 @@ gcp-local start --config=repro.yaml
 
 ## Install
 
-**One-line installer** (macOS and Linux, amd64 and arm64):
+**Requirements:** macOS or Linux on amd64 or arm64. Windows is not
+supported. Go ≥ 1.25 is needed only for `go install` and building from
+source.
+
+**One-line installer:**
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/GuitarWag/gcp-local/main/install.sh | sh
@@ -263,12 +287,14 @@ curl -sSL https://raw.githubusercontent.com/GuitarWag/gcp-local/main/install.sh 
 The script downloads the matching pre-built binary from the latest release
 and drops it in `/usr/local/bin` (or `~/.local/bin` if you can't write there).
 
-**Manual download** — grab the right `tar.gz` from
-[the releases page](https://github.com/GuitarWag/gcp-local/releases/latest):
+**Manual download** — each release ships
+`gcp-local_<version>_<os>_<arch>.tar.gz` for darwin/linux × amd64/arm64.
+Pick the right asset on [the releases page](https://github.com/GuitarWag/gcp-local/releases):
 
 ```bash
-# Example for macOS arm64; swap arch/os for your machine.
-curl -L https://github.com/GuitarWag/gcp-local/releases/latest/download/gcp-local_0.2.0_darwin_arm64.tar.gz | tar xz
+# Example: macOS arm64, v0.13.3 — swap version, os, and arch for your machine.
+curl -LO https://github.com/GuitarWag/gcp-local/releases/download/v0.13.3/gcp-local_0.13.3_darwin_arm64.tar.gz
+tar xzf gcp-local_0.13.3_darwin_arm64.tar.gz
 sudo mv gcp-local /usr/local/bin/
 ```
 
@@ -288,7 +314,27 @@ cd gcp-local
 go build -o gcp-local ./cmd/gcp-local
 ```
 
-No CGo. Builds on macOS and Linux with stock Go ≥ 1.25.
+No CGo.
+
+## Quickstart
+
+Start the emulator, export the SDK environment variables, and make one real
+call:
+
+```bash
+gcp-local start                 # daemon mode, port 4443
+eval $(gcp-local env)           # STORAGE_EMULATOR_HOST, PUBSUB_EMULATOR_HOST, ...
+
+# One real call — create a Cloud Storage bucket through the GCS JSON API:
+curl -X POST "http://localhost:4443/storage/v1/b?project=local-project" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"quickstart-demo"}'
+```
+
+Open `http://localhost:4443/dashboard` to watch buckets, topics, and secrets
+change as your SDK code writes to them. See
+[SDK compatibility](#sdk-compatibility) for what each environment variable
+does, and [Quick reference](#quick-reference) for the other commands.
 
 ## Quick reference
 
@@ -378,6 +424,8 @@ Set these env vars so the SDK clients hit the emulator instead of real GCP:
 export STORAGE_EMULATOR_HOST=http://localhost:4443
 export PUBSUB_EMULATOR_HOST=localhost:4443
 export FIRESTORE_EMULATOR_HOST=localhost:4443
+export BIGTABLE_EMULATOR_HOST=localhost:4443
+export SPANNER_EMULATOR_HOST=localhost:4443
 export GOOGLE_CLOUD_PROJECT=local-project
 export GOOGLE_APPLICATION_CREDENTIALS=~/.gcp-local/fake-creds.json
 ```
