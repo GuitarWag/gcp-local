@@ -8,6 +8,19 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-27
+
+### Changed
+
+- **Visible factory agents in herdr.** `FACTORY_RUNNER=herdr` runs every
+  stage job as an interactive agent in its own tab of a herdr workspace
+  named `factory`, and runs the janitor and the scout as resident agents
+  that stay open. The owner can read and chat with every agent. Tabs
+  close when their job advances the issue; the watchdog stops a job whose
+  screen does not change for 20 minutes. The factory pins the opencode
+  model through `~/.factory/opencode.json`. The default runner stays
+  `headless`.
+
 ## [0.12.2] - 2026-11-26
 
 ### Changed
@@ -658,7 +671,8 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.12.2...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.0
 [0.12.2]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.12.2
 [0.12.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.12.1
 [0.12.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.12.0
