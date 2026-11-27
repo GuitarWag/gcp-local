@@ -1,6 +1,6 @@
 ---
 name: factory
-description: Autonomous issue-to-release pipeline for gcp-local. Use when a factory prompt names a role (spec, verify, plan, build, review, fix, janitor, scout), or when you work on a GitHub issue that has a stage:* label.
+description: Autonomous issue-to-release pipeline for gcp-local. Use when a factory prompt names a role (spec, verify, plan, build, review, fix, janitor, scout, console), or when you work on a GitHub issue that has a stage:* label.
 ---
 
 # gcp-local factory

@@ -15,6 +15,7 @@ and opencode. They use the owner's GitHub identity.
 ```mermaid
 flowchart LR
   scout([scout]) -->|files issue| spec
+  console([console]) -->|files console issue| spec
   spec -->|spec comment + fizz model| verify
   verify -->|FizzBee pass| plan
   verify -->|FizzBee fail| spec
@@ -48,6 +49,7 @@ Other processes:
 | `release.sh cut` | every hour | Folds `changelog.d/` into `CHANGELOG.md` and opens a `release/vX.Y.Z` PR. The next tick merges it when CI is green, and `auto-tag.yml` publishes. |
 | janitor agent | every hour | Removes dead worktrees, branches and herdr tabs. Fixes labels. Resets flagged issues once, closes them on the second flag. Files issues for code and docs drift. |
 | scout agent | every 24 hours | Files at most 3 new feature issues, only when fewer than 5 issues wait in spec, verify and plan. |
+| console agent | every hour | Files 1 console UI issue (label `console`), only when fewer than 2 console issues are open. The owner sets priorities in the open issue with the labels `initiative` and `console`. |
 
 ## Holdout scenarios
 
@@ -149,6 +151,7 @@ dead worktrees, are the janitor's job.
 | Failed attempts before flag | 3 | `FACTORY_MAX_FAILS` |
 | Scout issues per run | 3 | (scout role) |
 | Scout backlog ceiling | 5 | `FACTORY_SCOUT_BACKLOG` |
+| Open console issues | 2 | `FACTORY_CONSOLE_WIP` |
 
 Branch protection on `main` requires the 4 CI checks and applies to
 admins. No agent can merge a PR with red or missing checks.

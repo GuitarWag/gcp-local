@@ -29,6 +29,9 @@ JANITOR_EVERY=${FACTORY_JANITOR_EVERY:-3600}
 SCOUT_EVERY=${FACTORY_SCOUT_EVERY:-86400}
 RELEASE_EVERY=${FACTORY_RELEASE_EVERY:-3600}
 SCOUT_BACKLOG=${FACTORY_SCOUT_BACKLOG:-5}
+# Console UI initiative: keep this many console issues in the pipeline.
+CONSOLE_EVERY=${FACTORY_CONSOLE_EVERY:-3600}
+CONSOLE_WIP=${FACTORY_CONSOLE_WIP:-2}
 RUNNER=${FACTORY_RUNNER:-headless}
 # Resident roles stay open in a herdr tab, so the owner can chat with them.
 RESIDENT=${FACTORY_RESIDENT-$([ "$RUNNER" = herdr ] && echo "janitor scout")}
@@ -229,6 +232,10 @@ tick() {
   elif is_resident scout; then
     ensure_resident scout
   fi
+  local console_open
+  console_open=$(gh issue list -R "$REPO" --state open --label console --limit 100 --json labels -q '
+    [.[] | select([.labels[].name] | index("initiative") | not)] | length')
+  if [ "${console_open:-$CONSOLE_WIP}" -lt "$CONSOLE_WIP" ]; then interval_role console "$CONSOLE_EVERY"; fi
 }
 
 while :; do
