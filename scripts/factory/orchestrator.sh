@@ -20,7 +20,8 @@ AGENTS=${FACTORY_AGENTS:-"pi opencode"}
 # A reviewer from another model family catches what the builders miss.
 REVIEW_AGENT=${FACTORY_REVIEW_AGENT:-}
 REVIEW_MODEL=${FACTORY_REVIEW_MODEL:-}
-BOSS=${FACTORY_BOSS:-opencode}
+# pi: herdr-shepherd 0.5 cannot set the opencode model.
+BOSS=${FACTORY_BOSS:-pi}
 WORKER=${FACTORY_WORKER:-pi}
 JOB_LEASE=${FACTORY_JOB_LEASE:-60}
 STALL_MIN=${FACTORY_STALL_MIN:-20}

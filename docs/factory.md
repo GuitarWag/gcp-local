@@ -204,7 +204,7 @@ Logs are in `~/.factory/logs/`. Job worktrees are in `~/.factory/wt/`.
 - Set `FACTORY_REVIEW_AGENT` and `FACTORY_REVIEW_MODEL` to review with a
   model family that differs from the builders' models. A reviewer that
   shares the builders' model shares their blind spots.
-- Teams use `FACTORY_BOSS` (default `opencode`) and `FACTORY_WORKER`
+- Teams use `FACTORY_BOSS` (default `pi`) and `FACTORY_WORKER`
   (default `pi`). pi uses its configured default model. opencode uses the
   last model selected in opencode.
 
