@@ -39,6 +39,7 @@ import (
 	"github.com/GuitarWag/gcp-local/internal/services/spanner"
 	"github.com/GuitarWag/gcp-local/internal/services/storage"
 	"github.com/GuitarWag/gcp-local/internal/services/tasks"
+	"github.com/GuitarWag/gcp-local/internal/services/workflows"
 	"github.com/GuitarWag/gcp-local/internal/state"
 )
 
@@ -73,6 +74,7 @@ type Gateway struct {
 	run     *cloudrun.Service
 	funcs   *cloudrun.Service
 	meta    *metadata.Service
+	wf      *workflows.Service
 	iamc    *iamcredentials.Service
 	iam     *iam.Store
 	iamSA   *iamadmin.Service
@@ -247,6 +249,14 @@ func New(cfg *config.Config, build BuildInfo) (*Gateway, error) {
 		g.funcs = svc
 		g.health.Set(svc.Name(), health.StatusReady)
 	}
+	if cfg.Services.Workflows.Enabled {
+		svc, err := workflows.New(store, cfg)
+		if err != nil {
+			return nil, fmt.Errorf("init workflows: %w", err)
+		}
+		g.wf = svc
+		g.health.Set(svc.Name(), health.StatusReady)
+	}
 	if cfg.Services.Metadata.Enabled {
 		svc, err := metadata.New(store, cfg)
 		if err != nil {
@@ -362,6 +372,8 @@ func (g *Gateway) handleReset(w http.ResponseWriter, r *http.Request) {
 		"tasks/queues",
 		"tasks/tasks",
 		"scheduler/jobs",
+		workflows.NamespaceWorkflows,
+		workflows.NamespaceOperations,
 		"kms/keyrings",
 		"kms/cryptokeys",
 		"bigtable/tables",
@@ -410,6 +422,9 @@ func (g *Gateway) dispatchV1(w http.ResponseWriter, r *http.Request) {
 	}
 	if g.sched != nil {
 		handlers = append(handlers, g.sched.HandleV1)
+	}
+	if g.wf != nil {
+		handlers = append(handlers, g.wf.HandleV1)
 	}
 	if g.kms != nil {
 		handlers = append(handlers, g.kms.HandleV1)

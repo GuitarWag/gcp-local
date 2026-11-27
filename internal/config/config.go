@@ -43,6 +43,7 @@ type ServicesConfig struct {
 	CloudRun      CloudRun      `yaml:"cloudrun"`
 	Functions     Functions     `yaml:"functions"`
 	Metadata      Metadata      `yaml:"metadata"`
+	Workflows     Workflows     `yaml:"workflows"`
 }
 
 type Metadata struct {
@@ -122,6 +123,10 @@ type Functions struct {
 	Enabled bool `yaml:"enabled"`
 }
 
+type Workflows struct {
+	Enabled bool `yaml:"enabled"`
+}
+
 type Storage struct {
 	Enabled bool     `yaml:"enabled"`
 	Buckets []Bucket `yaml:"buckets"`
@@ -172,6 +177,7 @@ func Default() *Config {
 			CloudRun:      CloudRun{Enabled: true},
 			Functions:     Functions{Enabled: true},
 			Metadata:      Metadata{Enabled: true},
+			Workflows:     Workflows{Enabled: true},
 		},
 	}
 }
