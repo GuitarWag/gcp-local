@@ -8,6 +8,12 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.13.2] - 2026-11-27
+
+### Added
+
+- **Factory console initiative.** A new `console` agent files one console UI issue every hour while fewer than 2 console issues are open. The owner sets its priorities in the open issue with the labels `initiative` and `console`.
+
 ## [0.13.1] - 2026-11-27
 
 ### Changed
@@ -685,7 +691,8 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.13.1...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.13.2...HEAD
+[0.13.2]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.2
 [0.13.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.1
 [0.13.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.0
 [0.12.2]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.12.2
