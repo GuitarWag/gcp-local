@@ -8,6 +8,22 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.13.3] - 2026-11-27
+
+### Changed
+
+- **Factory: faster and even agent use.** `FACTORY_AGENTS` entries can name a model (`pi:yld/glm-5.3-flash`), so jobs rotate harness and model pairs. Job slots go to the latest stage first. herdr jobs that make progress renew their claim, so a slow agent no longer fails at the 60-minute lease.
+
+### Fixed
+
+- **Release cut after a closed release PR.** The release manager now
+  resets the local `release/vX.Y.Z` branch and force-pushes it. Before,
+  a cut stopped with "a branch named 'release/v0.13.3' already exists"
+  after the release manager closed a broken release PR, so no release
+  shipped.
+
+- **Factory teams get their task.** The orchestrator sends the task to a team boss only after the boss finishes its first turn. Before, a boss that was still busy missed the task notice and waited. The default boss is now pi, because herdr-shepherd 0.5 cannot set the opencode model.
+
 ## [0.13.2] - 2026-11-27
 
 ### Added
@@ -691,7 +707,8 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.13.2...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.13.3...HEAD
+[0.13.3]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.3
 [0.13.2]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.2
 [0.13.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.1
 [0.13.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.0
