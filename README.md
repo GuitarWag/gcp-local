@@ -366,6 +366,7 @@ services:
 | IAM admin        | working (subset)  | `iam.googleapis.com` `projects.serviceAccounts` CRUD + `serviceAccounts.keys` create/list/delete with a fake base64 credentials JSON payload. |
 | Bigtable         | working (subset)  | Data plane: `MutateRow`, `MutateRows`, `ReadRows` (chunk streaming, row keys/ranges, `RowsLimit`, reversed scans), `SampleRowKeys`, `CheckAndMutateRow`, and the row-filter tree (Chain, Interleave, Condition, regex/range/limit/label filters). Admin: `CreateTable`, `ListTables`, `GetTable`, `DeleteTable`, `ModifyColumnFamilies`, `DropRowRange`. `ReadModifyWriteRow` and query/change-stream RPCs return `UNIMPLEMENTED`. |
 | Spanner          | working (subset)  | Databases via DatabaseAdmin (`CREATE/ALTER/DROP TABLE`), sessions, `ExecuteSql` (SELECT + DML), `Read` (point keys + ranges), `Commit` (all 5 mutation types), transactions (buffered DML/mutations, apply-or-discard on commit/rollback), streaming. Partitioned queries, interleaved tables, and indexes are not supported. |
+| Service Usage    | working           | Static catalog of every emulated service, per-project enable/disable state, synchronous batchEnable operations. |
 | Dataflow         | not implemented   |                                                     |
 | Vertex AI        | not implemented   |                                                     |
 | AlloyDB          | not implemented   |                                                     |
