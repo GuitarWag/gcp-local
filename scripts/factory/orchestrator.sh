@@ -205,8 +205,16 @@ interval_role() {
   fi
 }
 
+# A stopped job leaves its test emulators behind, owned by launchd.
+reap_orphan_emulators() {
+  local pids
+  pids=$(ps -eo pid=,ppid=,command= | awk '$2 == 1 && $3 ~ /\/gcp-local-(bin|echofn)-[0-9]+\//{print $1}')
+  [ -z "$pids" ] || [ -n "$DRY" ] || { log "stop $(echo "$pids" | wc -l | tr -d ' ') orphan test emulators"; echo "$pids" | xargs kill 2>/dev/null; }
+}
+
 tick() {
   [ -n "$DRY" ] || "$CLAIM" reap
+  reap_orphan_emulators
   running_jobs >/dev/null
   watchdog
   reap_herdr_jobs

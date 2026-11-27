@@ -42,7 +42,7 @@ Other processes:
 
 | Process | Interval | Job |
 |---|---|---|
-| `orchestrator.sh` | every 5 minutes | Reaps expired claims, starts agents and teams, closes finished team tabs, nudges the boss of a team that is idle for 10 minutes, runs the release script. |
+| `orchestrator.sh` | every 5 minutes | Reaps expired claims and orphan test emulators, starts agents and teams, closes finished team tabs, nudges the boss of a team that is idle for 10 minutes, runs the release script. |
 | `release.sh cut` | every hour | Folds `changelog.d/` into `CHANGELOG.md` and opens a `release/vX.Y.Z` PR. The next tick merges it when CI is green, and `auto-tag.yml` publishes. |
 | janitor agent | every hour | Removes dead worktrees, branches and herdr tabs. Fixes labels. Resets flagged issues once, closes them on the second flag. Files issues for code and docs drift. |
 | scout agent | every 24 hours | Files at most 3 new feature issues, only when fewer than 5 issues wait in spec and plan. |
