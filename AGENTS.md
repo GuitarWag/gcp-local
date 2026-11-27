@@ -76,6 +76,9 @@ scripts/ci/gate.sh            # vet, gofmt, golangci-lint (twice), ast-grep, pol
 scripts/ci/gate.sh --cover    # also the coverage ratchet
 ```
 
+At most 2 gate runs happen at the same time on one machine
+(`GATE_SLOTS`). A third run waits for a free slot.
+
 | Check | Config | What it blocks |
 |---|---|---|
 | golangci-lint | `.golangci.yml` | Bugs and unsafe code, in all code. |
