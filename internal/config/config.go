@@ -43,9 +43,14 @@ type ServicesConfig struct {
 	CloudRun      CloudRun      `yaml:"cloudrun"`
 	Functions     Functions     `yaml:"functions"`
 	Metadata      Metadata      `yaml:"metadata"`
+	ServiceUsage  ServiceUsage  `yaml:"serviceusage"`
 }
 
 type Metadata struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+type ServiceUsage struct {
 	Enabled bool `yaml:"enabled"`
 }
 
@@ -172,6 +177,7 @@ func Default() *Config {
 			CloudRun:      CloudRun{Enabled: true},
 			Functions:     Functions{Enabled: true},
 			Metadata:      Metadata{Enabled: true},
+			ServiceUsage:  ServiceUsage{Enabled: true},
 		},
 	}
 }

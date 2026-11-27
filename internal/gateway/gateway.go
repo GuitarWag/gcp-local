@@ -36,6 +36,7 @@ import (
 	"github.com/GuitarWag/gcp-local/internal/services/pubsub"
 	"github.com/GuitarWag/gcp-local/internal/services/scheduler"
 	"github.com/GuitarWag/gcp-local/internal/services/secretmanager"
+	"github.com/GuitarWag/gcp-local/internal/services/serviceusage"
 	"github.com/GuitarWag/gcp-local/internal/services/spanner"
 	"github.com/GuitarWag/gcp-local/internal/services/storage"
 	"github.com/GuitarWag/gcp-local/internal/services/tasks"
@@ -74,6 +75,7 @@ type Gateway struct {
 	funcs   *cloudrun.Service
 	meta    *metadata.Service
 	iamc    *iamcredentials.Service
+	svcu    *serviceusage.Service
 	iam     *iam.Store
 	iamSA   *iamadmin.Service
 	grpc    *grpc.Server
@@ -247,6 +249,12 @@ func New(cfg *config.Config, build BuildInfo) (*Gateway, error) {
 		g.funcs = svc
 		g.health.Set(svc.Name(), health.StatusReady)
 	}
+	if cfg.Services.ServiceUsage.Enabled {
+		svc := serviceusage.New(store, cfg)
+		g.svcu = svc
+		g.health.Set(svc.Name(), health.StatusReady)
+		svc.Register(g.mux)
+	}
 	if cfg.Services.Metadata.Enabled {
 		svc, err := metadata.New(store, cfg)
 		if err != nil {
@@ -369,6 +377,8 @@ func (g *Gateway) handleReset(w http.ResponseWriter, r *http.Request) {
 		iam.Namespace,
 		iamadmin.NamespaceAccounts,
 		iamadmin.NamespaceKeys,
+		"serviceusage/services",
+		"serviceusage/operations",
 	} {
 		all, err := g.store.List(ns, "")
 		if err != nil {
@@ -416,6 +426,9 @@ func (g *Gateway) dispatchV1(w http.ResponseWriter, r *http.Request) {
 	}
 	if g.iamc != nil {
 		handlers = append(handlers, g.iamc.HandleV1)
+	}
+	if g.svcu != nil {
+		handlers = append(handlers, g.svcu.HandleV1)
 	}
 	for _, h := range handlers {
 		if h(w, r, parts) {
