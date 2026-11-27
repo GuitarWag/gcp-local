@@ -8,6 +8,21 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.13.4] - 2026-11-27
+
+### Changed
+
+- **Idle team nudge and more teams.** When every agent of a build or fix
+  team is idle for 10 minutes (`FACTORY_TEAM_IDLE`), the orchestrator
+  tells the boss to check the worker reports, send missed tasks again,
+  or push and open the PR. Up to 6 teams run at the same time (was 2).
+
+### Removed
+
+- **FizzBee verify stage.** The factory no longer runs a FizzBee model
+  check between spec and plan, because FizzBee used too much memory.
+  The spec role now advances an issue to `stage:plan`.
+
 ## [0.13.3] - 2026-11-27
 
 ### Changed
@@ -707,7 +722,8 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.13.3...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.13.4...HEAD
+[0.13.4]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.4
 [0.13.3]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.3
 [0.13.2]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.2
 [0.13.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.1
