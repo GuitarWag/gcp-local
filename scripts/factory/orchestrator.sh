@@ -14,7 +14,8 @@ OWNER=${REPO%%/*}
 HOME_F=${FACTORY_HOME:-$HOME/.factory}
 TICK=${FACTORY_TICK:-300}
 MAX_JOBS=${FACTORY_MAX_JOBS:-3}
-MAX_TEAMS=${FACTORY_MAX_TEAMS:-2}
+MAX_TEAMS=${FACTORY_MAX_TEAMS:-6}
+TEAM_IDLE=${FACTORY_TEAM_IDLE:-10}
 # Entries are "agent" or "agent:provider/model"; jobs take them in turn.
 AGENTS=${FACTORY_AGENTS:-"pi opencode"}
 # A reviewer from another model family catches what the builders miss.
