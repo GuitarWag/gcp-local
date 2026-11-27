@@ -1,7 +1,7 @@
 ---
 id: 20261126-162636-spanner-emulator-sqlite-per-database-buffered
 title: "Spanner emulator: SQLite per database, buffered read-write transactions"
-status: proposed
+status: accepted
 date: 2026-11-26
 branch: feat/spanner-data-path-r3
 worktree: feat-spanner-data-path--b3730a7674d1b4f0

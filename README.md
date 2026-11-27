@@ -46,7 +46,7 @@ dashboard.
   variables.
 - Persists state to BoltDB or keeps it in memory, your choice.
 - Boots in ~50 ms. Restarts cleanly. Resets state on demand.
-- Has 130 integration tests using the real SDK clients, including
+- Has 180 integration tests using the real SDK clients, including
   race-detector-clean concurrency tests.
 
 ---
@@ -498,22 +498,22 @@ OTLP-gRPC collector. Any other value is rejected at start-up.
 ## Tests
 
 ```bash
-# Go (92 tests, race-detector clean)
+# Go (133 tests, race-detector clean)
 cd tests/go && go test -race ./...
 
-# Python (18 tests)
+# Python (25 tests)
 cd tests/python
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 .venv/bin/python -m pytest
 
-# TypeScript (20 tests)
+# TypeScript (22 tests)
 cd tests/typescript
 pnpm install
 pnpm test
 ```
 
-130 integration tests total. Tests use the real GCP client libraries — they
+180 integration tests total. Tests use the real GCP client libraries — they
 exercise the same wire surface your production code will hit.
 
 ## Divergences from the design spec
