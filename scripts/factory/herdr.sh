@@ -186,6 +186,10 @@ team_tab() {
   hjson agent list | jq -r --arg n "f$1-boss" '.result.agents[] | select(.name == $n) | .tab_id' | head -1
 }
 
+team_boss_status() {
+  hjson agent list | jq -r --arg n "f$1-boss" '.result.agents[] | select(.name == $n) | .agent_status' | head -1
+}
+
 close_team() {
   local tab
   tab=$(team_tab "$1")
@@ -231,7 +235,15 @@ spawn_team() {
   else
     "${launch[@]}" >>"$HOME_F/logs/f$issue.log" 2>&1
   fi || { "$CLAIM" drop "$issue" "$id"; return; }
-  sleep 30 # ponytail: fixed wait for the boss to start; poll herdr if it is too short
+  # A boss that is still in its first turn misses the task notice.
+  local waited=0 seen= st
+  while [ "$waited" -lt 300 ]; do
+    st=$(team_boss_status "$issue")
+    [ "$st" = working ] && seen=1
+    [ -n "$seen" ] && [ "$st" = idle ] && break
+    sleep 5
+    waited=$((waited + 5))
+  done
   herdr-shepherd "f$issue" --send boss --message "$(prompt_for "$role" "$issue" "$id" "$wt")
 You are the herdr boss of team f$issue. Renew the claim with: scripts/factory/claim.sh renew $issue $id $TEAM_LEASE" \
     >>"$HOME_F/logs/f$issue.log" 2>&1
