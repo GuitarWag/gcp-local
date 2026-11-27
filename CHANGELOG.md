@@ -8,6 +8,12 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.13.3] - 2026-11-27
+
+### Changed
+
+- **Factory: faster and even agent use.** `FACTORY_AGENTS` entries can name a model (`pi:yld/glm-5.3-flash`), so jobs rotate harness and model pairs. Job slots go to the latest stage first. herdr jobs that make progress renew their claim, so a slow agent no longer fails at the 60-minute lease.
+
 ## [0.13.2] - 2026-11-27
 
 ### Added
@@ -691,7 +697,8 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.13.2...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.13.3...HEAD
+[0.13.3]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.3
 [0.13.2]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.2
 [0.13.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.1
 [0.13.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.0
