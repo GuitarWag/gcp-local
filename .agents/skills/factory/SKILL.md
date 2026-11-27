@@ -1,6 +1,6 @@
 ---
 name: factory
-description: Autonomous issue-to-release pipeline for gcp-local. Use when a factory prompt names a role (spec, verify, plan, build, review, fix, janitor, scout, console), or when you work on a GitHub issue that has a stage:* label.
+description: Autonomous issue-to-release pipeline for gcp-local. Use when a factory prompt names a role (spec, plan, build, review, fix, janitor, scout, console), or when you work on a GitHub issue that has a stage:* label.
 ---
 
 # gcp-local factory
@@ -17,8 +17,7 @@ Each open feature issue has exactly one `stage:*` label.
 
 | Label | Role | Next stage on success | On failure |
 |---|---|---|---|
-| `stage:spec` | spec | `stage:verify` | flag |
-| `stage:verify` | verify | `stage:plan` | `stage:spec` |
+| `stage:spec` | spec | `stage:plan` | flag |
 | `stage:plan` | plan | `stage:build` | flag |
 | `stage:build` | build (herdr team) | `stage:review` | flag |
 | `stage:review` | review | `stage:accept` | `stage:fix` |
@@ -62,7 +61,6 @@ issue or PR comment. The latest comment with a marker is the current one.
 | Marker | Written by |
 |---|---|
 | `<!-- factory:spec -->` | spec |
-| `<!-- factory:verify pass -->` or `<!-- factory:verify fail -->` | verify |
 | `<!-- factory:plan team=N branch=NAME -->` | plan |
 | `<!-- factory:verdict approve round=N -->` or `<!-- factory:verdict changes round=N -->` | review (on the PR) |
 | `<!-- factory:accept pass -->` or `<!-- factory:accept fail -->` | accept |

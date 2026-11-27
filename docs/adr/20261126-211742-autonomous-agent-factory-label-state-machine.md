@@ -39,7 +39,7 @@ release picked the same version.
 3. `scripts/factory/orchestrator.sh` is a shell loop with no LLM. It
    starts ephemeral `pi -p` / `opencode run` jobs for spec, verify, plan,
    review, janitor and scout, and herdr-shepherd teams for build and fix.
-4. Specs for features with concurrency or retries carry a FizzBee model.
+4. (Replaced by 20261127-210523: no verify stage.) Specs for features with concurrency or retries carry a FizzBee model.
    The verify stage runs it; a counterexample sends the spec back.
 5. No human gate. Agents use the owner's GitHub identity. GitHub forbids
    self-approval, so the review verdict is a marked PR comment.

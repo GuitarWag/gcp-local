@@ -214,7 +214,7 @@ tick() {
 
   local role issue
   # Latest stage first: work near merge finishes before new work starts.
-  for role in accept review plan verify spec; do
+  for role in accept review plan spec; do
     for issue in $(issues_in "$role"); do
       [ "$(running_jobs)" -lt "$MAX_JOBS" ] || break 2
       spawn_job "$role" "$issue"
@@ -231,7 +231,7 @@ tick() {
   "$ROOT/scripts/factory/release.sh" merge
   if due release "$RELEASE_EVERY"; then "$ROOT/scripts/factory/release.sh" cut; fi
   interval_role janitor "$JANITOR_EVERY"
-  local backlog=$(($(count_label stage:spec) + $(count_label stage:verify) + $(count_label stage:plan)))
+  local backlog=$(($(count_label stage:spec) + $(count_label stage:plan)))
   if [ "$backlog" -lt "$SCOUT_BACKLOG" ]; then
     interval_role scout "$SCOUT_EVERY"
   elif is_resident scout; then
