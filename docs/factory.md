@@ -79,7 +79,9 @@ An agent owns an issue only while it holds a claim. A claim is a comment
 
 - When two agents claim at the same time, the oldest valid claim comment
   wins and the other agent deletes its comment.
-- An ephemeral job has a 60-minute lease. A team has 240 minutes and the
+- An ephemeral job has a 60-minute lease. With the herdr runner, the
+  orchestrator renews it on each tick where the tab screen changed, so
+  only a stalled job loses its claim. A team has 240 minutes and the
   boss renews it.
 - The orchestrator removes expired claims and records a
   `factory:failed` comment. After 3 failures at one stage, the issue gets
@@ -193,7 +195,12 @@ Logs are in `~/.factory/logs/`. Job worktrees are in `~/.factory/wt/`.
 
 ## Agent choice
 
-- Ephemeral jobs alternate between `FACTORY_AGENTS` (default `pi opencode`).
+- Ephemeral jobs take the entries of `FACTORY_AGENTS` in turn (default
+  `pi opencode`). An entry is `agent` or `agent:provider/model`, so the
+  factory can rotate harness and model pairs, for example
+  `"pi:yld/glm-5.3-flash opencode:yld/inkling-2-mini pi:yld/inkling-2-mini opencode:yld/glm-5.3-flash"`.
+- Each tick fills free job slots from the latest stage first (accept,
+  review, plan, verify, then spec), so work near merge finishes first.
 - Set `FACTORY_REVIEW_AGENT` and `FACTORY_REVIEW_MODEL` to review with a
   model family that differs from the builders' models. A reviewer that
   shares the builders' model shares their blind spots.
