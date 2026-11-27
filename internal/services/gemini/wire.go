@@ -73,14 +73,14 @@ func (s *Service) listModels() []map[string]any {
 func (s *Service) writeError(w http.ResponseWriter, status int, modelName string) {
 	msg := fmt.Sprintf("model %s is unavailable (injected failure)", modelName)
 	body := map[string]any{
-		"error": map[string]any{
-			"code":    status,
-			"message": msg,
-			"status":  statusText(status),
+		errKeyError: map[string]any{
+			errKeyCode:    status,
+			errKeyMessage: msg,
+			errKeyStatus:  statusText(status),
 		},
 	}
 	if status == http.StatusTooManyRequests {
-		errBody, _ := body["error"].(map[string]any)
+		errBody, _ := body[errKeyError].(map[string]any)
 		errBody["details"] = []map[string]any{{
 			"@type":      "type.googleapis.com/google.rpc.RetryInfo",
 			"retryDelay": s.retryDelayFor(modelName),

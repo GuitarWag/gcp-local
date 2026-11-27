@@ -336,26 +336,34 @@ func maxInt(a, b int) int {
 	return b
 }
 
+// Gemini error JSON keys, repeated across the error writers.
+const (
+	errKeyError   = "error"
+	errKeyCode    = "code"
+	errKeyMessage = "message"
+	errKeyStatus  = "status"
+)
+
 func methodNotAllowed(w http.ResponseWriter) {
 	httpresp.Err(w, http.StatusMethodNotAllowed, "method not allowed")
 }
 
 func notFoundModel(w http.ResponseWriter, id string) {
 	httpresp.JSON(w, http.StatusNotFound, map[string]any{
-		"error": map[string]any{
-			"code":    404,
-			"message": fmt.Sprintf("models/%s is not found for API version v1beta, or is not supported for generateContent.", id),
-			"status":  "NOT_FOUND",
+		errKeyError: map[string]any{
+			errKeyCode:    404,
+			errKeyMessage: fmt.Sprintf("models/%s is not found for API version v1beta, or is not supported for generateContent.", id),
+			errKeyStatus:  "NOT_FOUND",
 		},
 	})
 }
 
 func badRequest(w http.ResponseWriter, msg string) {
 	httpresp.JSON(w, http.StatusBadRequest, map[string]any{
-		"error": map[string]any{
-			"code":    400,
-			"message": msg,
-			"status":  "INVALID_ARGUMENT",
+		errKeyError: map[string]any{
+			errKeyCode:    400,
+			errKeyMessage: msg,
+			errKeyStatus:  "INVALID_ARGUMENT",
 		},
 	})
 }
