@@ -89,7 +89,7 @@ func (s *Service) pageHandler(id string) (http.HandlerFunc, bool) {
 			return nil, false
 		}
 		return s.pageSpanner, true
-	case "gemini":
+	case geminiServiceID:
 		if s.opts.Gemini == nil {
 			return nil, false
 		}
@@ -183,7 +183,7 @@ func (s *Service) apiHandler(id string) (http.HandlerFunc, bool) {
 			return nil, false
 		}
 		return s.apiSpanner, true
-	case "gemini":
+	case geminiServiceID:
 		if s.opts.Gemini == nil {
 			return nil, false
 		}
