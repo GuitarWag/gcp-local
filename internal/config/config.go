@@ -43,10 +43,33 @@ type ServicesConfig struct {
 	CloudRun      CloudRun      `yaml:"cloudrun"`
 	Functions     Functions     `yaml:"functions"`
 	Metadata      Metadata      `yaml:"metadata"`
+	Gemini        Gemini        `yaml:"gemini"`
 }
 
 type Metadata struct {
 	Enabled bool `yaml:"enabled"`
+}
+
+// Gemini configures the generativelanguage fixture service. Enabled when
+// at least one model is listed; there is no separate enabled flag.
+type Gemini struct {
+	Models    []GeminiModel    `yaml:"models"`
+	FailFirst []GeminiFailRule `yaml:"failFirst"`
+}
+
+type GeminiModel struct {
+	Name        string `yaml:"name"`
+	Reply       string `yaml:"reply"`
+	Chunks      int    `yaml:"chunks"`
+	LatencyMs   int    `yaml:"latencyMs"`
+	CountTokens int    `yaml:"countTokens"`
+}
+
+type GeminiFailRule struct {
+	Model      string `yaml:"model"`
+	Status     int    `yaml:"status"`
+	Count      int    `yaml:"count"`
+	RetryDelay string `yaml:"retryDelay"`
 }
 
 type SecretManager struct {
@@ -172,6 +195,7 @@ func Default() *Config {
 			CloudRun:      CloudRun{Enabled: true},
 			Functions:     Functions{Enabled: true},
 			Metadata:      Metadata{Enabled: true},
+			Gemini:        Gemini{},
 		},
 	}
 }
