@@ -8,6 +8,20 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-11-27
+
+### Changed
+
+- **Docs refreshed by the janitor.** README test counts match the suites
+  now (133 Go, 25 Python, 22 TypeScript, 180 total), AGENTS.md lists the
+  metadata, iamcredentials and iamadmin service packages, and the Spanner
+  SQLite-per-database ADR is accepted now that PR #48 is merged.
+  Closes #61.
+
+### Fixed
+
+- **Factory herdr runner: stage jobs start work again.** pi tabs start with `--approve`, so pi does not wait at a folder trust question. opencode tabs create their session with `opencode run -m <model>` and then open the TUI on it, because the opencode v2 TUI ignores the configured model and picked a model with no valid credentials.
+
 ## [0.13.0] - 2026-11-27
 
 ### Changed
@@ -671,7 +685,8 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.13.1...HEAD
+[0.13.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.1
 [0.13.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.0
 [0.12.2]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.12.2
 [0.12.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.12.1
