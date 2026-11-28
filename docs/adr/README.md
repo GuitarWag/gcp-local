@@ -4,6 +4,7 @@
 
 | Record | Status | Date | Tags |
 |---|---|---|---|
+| [CVE dependency remediation for CI dependency scanning](20261128-062651-cve-dependency-remediation-for-ci-dependency.md) | accepted | 2026-11-28 | cve, deps |
 | [Remove the FizzBee verify stage](20261127-210523-remove-the-fizzbee-verify-stage.md) | accepted | 2026-11-27 | process, factory |
 | [Nudge the boss of an idle factory team](20261127-201615-nudge-the-boss-of-an-idle.md) | accepted | 2026-11-27 | process, factory, herdr |
 | [Console UI initiative role](20261127-121826-console-ui-initiative-role.md) | accepted | 2026-11-27 | process, factory, console |
@@ -18,21 +19,22 @@
 
 ```mermaid
 graph TD
-  n0["Remove the FizzBee verify stage"]
-  n1["Nudge the boss of an idle factory team"]
-  n2["Console UI initiative role"]
-  n3["Visible factory agents: herdr runner with resident janitor …"]
-  n4["Holdout acceptance scenarios between review and merge"]
-  n5["CI guardrails: mechanical checks over written rules"]
-  n6["Autonomous agent factory: label state machine, no human gate"]
-  n7["Spanner emulator: SQLite per database, buffered read-write …"]
-  n8["Adopt adrlog CLI for architecture decision records"]
-  n0 --> n6
-  n1 --> n3
-  n2 --> n6
-  n3 --> n6
-  n4 --> n6
-  n5 --> n6
-  n6 --> n8
-  n7 --> n8
+  n0["CVE dependency remediation for CI dependency scanning"]
+  n1["Remove the FizzBee verify stage"]
+  n2["Nudge the boss of an idle factory team"]
+  n3["Console UI initiative role"]
+  n4["Visible factory agents: herdr runner with resident janitor …"]
+  n5["Holdout acceptance scenarios between review and merge"]
+  n6["CI guardrails: mechanical checks over written rules"]
+  n7["Autonomous agent factory: label state machine, no human gate"]
+  n8["Spanner emulator: SQLite per database, buffered read-write …"]
+  n9["Adopt adrlog CLI for architecture decision records"]
+  n1 --> n7
+  n2 --> n4
+  n3 --> n7
+  n4 --> n7
+  n5 --> n7
+  n6 --> n7
+  n7 --> n9
+  n8 --> n9
 ```
