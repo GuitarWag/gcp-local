@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    - cron: '0 6 * * 1'
 
 permissions:
   contents: read
@@ -12,6 +14,7 @@ permissions:
 jobs:
   build:
     name: Build + vet + fmt
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,6 +35,7 @@ jobs:
 
   go-tests:
     name: Go integration tests
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     needs: build
     steps:
@@ -49,6 +53,7 @@ jobs:
 
   python-tests:
     name: Python integration tests
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     needs: build
     steps:
@@ -73,6 +78,7 @@ jobs:
 
   typescript-tests:
     name: TypeScript integration tests
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     needs: build
     steps:
@@ -98,6 +104,7 @@ jobs:
 
   lint:
     name: Lint
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -163,3 +170,49 @@ jobs:
             tests/go/go.sum
       - name: coverage ratchet
         run: scripts/ci/coverage.sh origin/main
+
+  cve-scan-go:
+    name: CVE scan (Go)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+          cache-dependency-path: |
+            go.sum
+            tests/go/go.sum
+      - run: go install golang.org/x/vuln/cmd/govulncheck@v1.10.0
+      - run: govulncheck ./...
+      - name: govulncheck (tests/go)
+        working-directory: tests/go
+        run: govulncheck ./...
+
+  cve-scan-js:
+    name: CVE scan (JavaScript)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: pnpm audit
+        working-directory: tests/typescript
+        run: pnpm audit --audit-level high
+
+  cve-scan-python:
+    name: CVE scan (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pip-audit==2.10.1
+      - name: pip-audit
+        working-directory: tests/python
+        run: pip-audit -r requirements.txt --strict
