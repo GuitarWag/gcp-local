@@ -50,7 +50,7 @@ type Options struct {
 	CloudRun    ConsoleCloudRun
 	Functions   ConsoleCloudRun
 	Memorystore ConsoleMemorystore
-	Bigtable    ConsoleStubService
+	Bigtable    ConsoleBigtable
 	Spanner     ConsoleStubService
 }
 
@@ -127,9 +127,14 @@ type ConsoleMemorystore interface {
 	ConsoleStatus() map[string]any
 }
 
-// ConsoleStubService is the contract for emulated services that are
-// stubs (Bigtable, Spanner) — they just expose enough to render a
-// status page.
+type ConsoleBigtable interface {
+	ConsoleStatus() map[string]any
+	ConsoleTables() ([]map[string]any, error)
+	ConsoleRows(table string, limit int) ([]map[string]any, error)
+}
+
+// ConsoleStubService is the contract for stub services. Spanner is the
+// only stub; it exposes enough to render a status page.
 type ConsoleStubService interface {
 	ConsoleStatus() map[string]any
 }
@@ -183,7 +188,7 @@ func New(store state.Store, opts Options) (*Service, error) {
 		{ID: "cloudrun", HealthName: "cloudrun", Label: "Cloud Run", Href: "/console/cloudrun", Icon: "rocket_launch", Endpoint: "/v2/projects/*/services", Enabled: opts.CloudRun != nil},
 		{ID: "functions", HealthName: "functions", Label: "Cloud Functions", Href: "/console/functions", Icon: "functions", Endpoint: "/v2/projects/*/functions", Enabled: opts.Functions != nil},
 		{ID: "memorystore", HealthName: "memorystore", Label: "Memorystore", Href: "/console/memorystore", Icon: "memory", Endpoint: "Redis on its own port", Enabled: opts.Memorystore != nil},
-		{ID: "bigtable", HealthName: "bigtable", Label: "Bigtable", Href: "/console/bigtable", Icon: "view_module", Endpoint: "gRPC (bigtable.v2, stub)", Enabled: opts.Bigtable != nil},
+		{ID: "bigtable", HealthName: "bigtable", Label: "Bigtable", Href: "/console/bigtable", Icon: "view_module", Endpoint: "gRPC (bigtable.v2)", Enabled: opts.Bigtable != nil},
 		{ID: "spanner", HealthName: "spanner", Label: "Spanner", Href: "/console/spanner", Icon: "hub", Endpoint: "gRPC (spanner.v1, stub)", Enabled: opts.Spanner != nil},
 	}
 	return s, nil

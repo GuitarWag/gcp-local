@@ -1,0 +1,24 @@
+{{define "content"}}
+<div id="no-tables" class="empty" hidden>No tables yet</div>
+<div class="split">
+  <div class="col" id="detail-panes-wrap">
+    <h3>Tables</h3>
+    <ul id="tables" class="kv"></ul>
+  </div>
+  <div class="col" id="detail-panes">
+    <h3 id="tname">Select a table.</h3>
+    <h3>Families</h3>
+    <table class="compact">
+      <thead><tr><th>Family</th><th>Order</th><th>GC rule</th><th>Value type</th></tr></thead>
+      <tbody id="families"></tbody>
+    </table>
+    <h3>Rows</h3>
+    <table class="compact">
+      <thead><tr><th>Key</th><th>Cells</th><th>Size</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <h3 id="rowdetail-head">Row detail</h3>
+    <div id="rowdetail"></div>
+  </div>
+</div>
+{{end}}
