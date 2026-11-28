@@ -326,14 +326,14 @@ func (s *Service) CreateSubscription(name, topic string, ackDeadline int, pushUR
 	return nil
 }
 
-func (s *Service) GetSubscription(name string) (string, int, error) {
+func (s *Service) getSubscription(name string) (subscriptionResource, error) {
 	data, err := s.store.Get(nsSubscriptions, name)
 	if err != nil {
-		return "", 0, ErrSubMissing
+		return subscriptionResource{}, ErrSubMissing
 	}
 	var sub subscriptionResource
 	_ = json.Unmarshal(data, &sub)
-	return sub.Topic, sub.AckDeadlineSeconds, nil
+	return sub, nil
 }
 
 func (s *Service) DeleteSubscription(name string) error {

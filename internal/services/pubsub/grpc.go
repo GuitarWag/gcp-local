@@ -115,14 +115,19 @@ func (s *subscriberServer) CreateSubscription(_ context.Context, sub *pb.Subscri
 }
 
 func (s *subscriberServer) GetSubscription(_ context.Context, req *pb.GetSubscriptionRequest) (*pb.Subscription, error) {
-	topic, ack, err := s.svc.GetSubscription(req.GetSubscription())
+	sub, err := s.svc.getSubscription(req.GetSubscription())
 	if err != nil {
 		return nil, status.Error(codes.NotFound, "subscription not found")
 	}
+	var push *pb.PushConfig
+	if sub.PushConfig != nil {
+		push = &pb.PushConfig{PushEndpoint: sub.PushConfig.PushEndpoint}
+	}
 	return &pb.Subscription{
 		Name:               req.GetSubscription(),
-		Topic:              topic,
-		AckDeadlineSeconds: int32(ack),
+		Topic:              sub.Topic,
+		AckDeadlineSeconds: int32(sub.AckDeadlineSeconds),
+		PushConfig:         push,
 	}, nil
 }
 
@@ -177,7 +182,7 @@ func (s *subscriberServer) StreamingPull(stream pb.Subscriber_StreamingPullServe
 	if subName == "" {
 		return status.Error(codes.InvalidArgument, "subscription required")
 	}
-	if _, _, err := s.svc.GetSubscription(subName); err != nil {
+	if _, err := s.svc.getSubscription(subName); err != nil {
 		return status.Error(codes.NotFound, "subscription not found")
 	}
 
