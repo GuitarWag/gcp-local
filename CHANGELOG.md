@@ -8,6 +8,16 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.14.4] - 2026-11-28
+
+### Changed
+
+- **Factory time limits and build queue.** Review and accept jobs get 150
+  minutes. A job that reaches its time limit while it still works no longer
+  counts as a failed attempt. The orchestrator starts no spec or plan job
+  while 8 or more issues wait in build or fix. A team start keeps a local
+  branch with commits that the last team did not push.
+
 ## [0.14.3] - 2026-11-28
 
 ### Changed
@@ -779,7 +789,8 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.14.3...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.14.4...HEAD
+[0.14.4]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.14.4
 [0.14.3]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.14.3
 [0.14.2]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.14.2
 [0.14.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.14.1
