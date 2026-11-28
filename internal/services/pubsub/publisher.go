@@ -149,7 +149,7 @@ func (s *Service) publish(w http.ResponseWriter, r *http.Request, topic string) 
 	ids, err := s.PublishMessages(topic, msgs)
 	if err != nil {
 		if errors.Is(err, ErrTopicMissing) {
-			s.writeErr(w, http.StatusNotFound, "topic not found")
+			s.writeErr(w, http.StatusNotFound, "topic not found: "+topic)
 			return
 		}
 		s.writeErr(w, http.StatusInternalServerError, err.Error())

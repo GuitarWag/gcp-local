@@ -64,7 +64,7 @@ func (p *publisherServer) Publish(_ context.Context, req *pb.PublishRequest) (*p
 	ids, err := p.svc.PublishMessages(req.GetTopic(), msgs)
 	if err != nil {
 		if errors.Is(err, ErrTopicMissing) {
-			return nil, status.Error(codes.NotFound, "topic not found")
+			return nil, status.Error(codes.NotFound, "topic not found: "+req.GetTopic())
 		}
 		return nil, status.Error(codes.Internal, err.Error())
 	}
