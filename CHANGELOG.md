@@ -8,6 +8,66 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-28
+
+### Added
+
+- **Service Usage API emulator.** The emulator now serves the Service Usage API
+  at `/v1/projects/{project}/services`: list with `filter=state:ENABLED|DISABLED`
+  plus `pageSize` and `pageToken`, get, and `:enable` / `:disable` verbs that
+  return completed long-running operations. `services:batchEnable` enables up
+  to 20 services in one call. A static catalog covers the 19 emulated services,
+  and per-project enable/disable state persists through the shared state store.
+  Closes #40.
+
+## [0.13.5] - 2026-11-28
+
+### Changed
+
+- Widened the gosec exclusion paths that pinned `pubsub.go` and `bigquery.go` to their whole packages, so the #62 file splits keep the same exclusions.
+
+## [0.13.4] - 2026-11-27
+
+### Changed
+
+- **Gate slots.** `scripts/ci/gate.sh` runs at most 2 at the same time
+  on one machine (`GATE_SLOTS`). Other runs wait for a free slot. Each
+  run can use 1 to 2 GB, and parallel factory agents ran out of memory.
+
+- **Idle team nudge and more teams.** When every agent of a build or fix
+  team is idle for 10 minutes (`FACTORY_TEAM_IDLE`), the orchestrator
+  tells the boss to check the worker reports, send missed tasks again,
+  or push and open the PR. Up to 6 teams run at the same time (was 2).
+
+### Removed
+
+- **FizzBee verify stage.** The factory no longer runs a FizzBee model
+  check between spec and plan, because FizzBee used too much memory.
+  The spec role now advances an issue to `stage:plan`.
+
+### Fixed
+
+- **Orphan test emulators.** When the factory stops an agent job, the
+  test emulators of that job kept running. 248 of them used memory on
+  the factory Mac. The orchestrator now stops test emulators and
+  `echofn` fixtures that have no parent process on each tick.
+
+## [0.13.3] - 2026-11-27
+
+### Changed
+
+- **Factory: faster and even agent use.** `FACTORY_AGENTS` entries can name a model (`pi:yld/glm-5.3-flash`), so jobs rotate harness and model pairs. Job slots go to the latest stage first. herdr jobs that make progress renew their claim, so a slow agent no longer fails at the 60-minute lease.
+
+### Fixed
+
+- **Release cut after a closed release PR.** The release manager now
+  resets the local `release/vX.Y.Z` branch and force-pushes it. Before,
+  a cut stopped with "a branch named 'release/v0.13.3' already exists"
+  after the release manager closed a broken release PR, so no release
+  shipped.
+
+- **Factory teams get their task.** The orchestrator sends the task to a team boss only after the boss finishes its first turn. Before, a boss that was still busy missed the task notice and waited. The default boss is now pi, because herdr-shepherd 0.5 cannot set the opencode model.
+
 ## [0.13.2] - 2026-11-27
 
 ### Added
@@ -691,7 +751,11 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.13.2...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.14.0
+[0.13.5]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.5
+[0.13.4]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.4
+[0.13.3]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.3
 [0.13.2]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.2
 [0.13.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.1
 [0.13.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.0

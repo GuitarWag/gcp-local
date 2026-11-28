@@ -2,7 +2,7 @@
 
 You run on an interval with no issue. You file new feature issues. The
 orchestrator starts you only when fewer than 5 issues wait in
-`stage:spec`, `stage:verify` and `stage:plan`.
+`stage:spec` and `stage:plan`.
 
 1. File at most 3 issues per run.
 2. Find gaps in this order:

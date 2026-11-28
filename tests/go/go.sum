@@ -27,6 +27,8 @@ cloud.google.com/go/pubsub v1.50.1 h1:fzbXpPyJnSGvWXF1jabhQeXyxdbCIkXTpjXHy7xviB
 cloud.google.com/go/pubsub v1.50.1/go.mod h1:6YVJv3MzWJUVdvQXG081sFvS0dWQOdnV+oTo++q/xFk=
 cloud.google.com/go/pubsub/v2 v2.0.0 h1:0qS6mRJ41gD1lNmM/vdm6bR7DQu6coQcVwD+VPf0Bz0=
 cloud.google.com/go/pubsub/v2 v2.0.0/go.mod h1:0aztFxNzVQIRSZ8vUr79uH2bS3jwLebwK6q1sgEub+E=
+cloud.google.com/go/serviceusage v1.15.0 h1:/rQQl4i+HFuZljYdauY5w8AVUGYl9uTD2+juM1MiewA=
+cloud.google.com/go/serviceusage v1.15.0/go.mod h1:zTzxXSY22kIW2VTykOCi5p5HeHv2a/othkkOsV8jKY8=
 cloud.google.com/go/spanner v1.91.0 h1:XwXfcZ0kc1NT9Uu2IsThFiWtYptB+WgLn/KZEZcyzRg=
 cloud.google.com/go/spanner v1.91.0/go.mod h1:8NB5a7qgwIhGD19Ly+vkpKffPL78vIG9RcrgsuREha0=
 cloud.google.com/go/storage v1.56.0 h1:iixmq2Fse2tqxMbWhLWC9HfBj1qdxqAmiK8/eqtsLxI=

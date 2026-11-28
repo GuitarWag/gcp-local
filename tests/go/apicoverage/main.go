@@ -46,7 +46,7 @@ var restAPIs = [][2]string{
 	{"storage", "v1"}, {"pubsub", "v1"}, {"secretmanager", "v1"}, {"cloudtasks", "v2"},
 	{"cloudscheduler", "v1"}, {"cloudkms", "v1"}, {"logging", "v2"}, {"monitoring", "v3"},
 	{"bigquery", "v2"}, {"run", "v2"}, {"cloudfunctions", "v2"}, {"sqladmin", "v1beta4"},
-	{"iam", "v1"}, {"iamcredentials", "v1"}, {"workflows", "v1"},
+	{"iam", "v1"}, {"iamcredentials", "v1"}, {"serviceusage", "v1"}, {"workflows", "v1"},
 }
 
 var grpcServices = []protoreflect.FullName{
