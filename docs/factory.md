@@ -130,7 +130,9 @@ A model request that gets no answer never times out, so an agent can hang
 for good and keep its job slot. On every tick, the orchestrator stops an
 agent whose output has not changed for `FACTORY_STALL_MIN` minutes
 (default 20), or that has run for `FACTORY_JOB_MAX_MIN` minutes (default
-90). For headless jobs it watches the log file; for herdr jobs it watches
+90; review and accept get `FACTORY_JOB_MAX_MIN_LONG`, default 150). A herdr
+job that reaches the time limit while its screen still changes ends
+without a failed attempt. For headless jobs it watches the log file; for herdr jobs it watches
 the pane's screen, without the bottom lines where agents animate a
 spinner. A herdr job whose tab you close counts as a failed attempt. The
 job wrapper then releases the claim and records a failed attempt, and the
@@ -147,6 +149,7 @@ dead worktrees, are the janitor's job.
 | Ephemeral jobs at the same time | 3 | `FACTORY_MAX_JOBS` |
 | herdr teams at the same time | 6 | `FACTORY_MAX_TEAMS` |
 | Minutes a whole team is idle before the orchestrator nudges the boss | 10 | `FACTORY_TEAM_IDLE` |
+| Issues in build or fix that stop new spec and plan jobs | 8 | `FACTORY_BUILD_WIP` |
 | Review rounds before flag | 3 | (review role) |
 | Failed attempts before flag | 3 | `FACTORY_MAX_FAILS` |
 | Scout issues per run | 3 | (scout role) |
