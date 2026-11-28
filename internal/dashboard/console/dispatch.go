@@ -89,7 +89,7 @@ func (s *Service) pageHandler(id string) (http.HandlerFunc, bool) {
 			return nil, false
 		}
 		return s.pageSpanner, true
-	case "iamadmin":
+	case iamadminPageID:
 		if s.opts.IAMAdmin == nil {
 			return nil, false
 		}
@@ -183,7 +183,7 @@ func (s *Service) apiHandler(id string) (http.HandlerFunc, bool) {
 			return nil, false
 		}
 		return s.apiSpanner, true
-	case "iamadmin":
+	case iamadminPageID:
 		if s.opts.IAMAdmin == nil {
 			return nil, false
 		}

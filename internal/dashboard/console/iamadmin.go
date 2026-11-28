@@ -8,6 +8,11 @@ import (
 	"strings"
 )
 
+const (
+	iamadminPageID = "iamadmin"
+	pageScriptKey  = "PageScript"
+)
+
 const iamadminPageJS = `
 window.__page = function () {
   var accountsEl = document.getElementById('accounts');
@@ -127,8 +132,8 @@ window.__page = function () {
 `
 
 func (s *Service) pageIAMAdmin(w http.ResponseWriter, _ *http.Request) {
-	s.render(w, "iamadmin.html", "IAM Admin", "iamadmin", map[string]any{
-		"PageScript": template.JS(iamadminPageJS),
+	s.render(w, "iamadmin.html", "IAM Admin", iamadminPageID, map[string]any{
+		pageScriptKey: template.JS(iamadminPageJS),
 	})
 }
 
@@ -260,8 +265,13 @@ func (s *Service) apiIAMAdminCredentials(w http.ResponseWriter, r *http.Request,
 		adapterWriteErr(w, err)
 		return
 	}
+	var cred any
+	if err := json.Unmarshal(data, &cred); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Content-Disposition", "attachment; filename="+filename)
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(data)
+	_ = json.NewEncoder(w).Encode(cred)
 }

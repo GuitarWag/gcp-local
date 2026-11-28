@@ -199,7 +199,7 @@ func New(store state.Store, opts Options) (*Service, error) {
 		{ID: "memorystore", HealthName: "memorystore", Label: "Memorystore", Href: "/console/memorystore", Icon: "memory", Endpoint: "Redis on its own port", Enabled: opts.Memorystore != nil},
 		{ID: "bigtable", HealthName: "bigtable", Label: "Bigtable", Href: "/console/bigtable", Icon: "view_module", Endpoint: "gRPC (bigtable.v2, stub)", Enabled: opts.Bigtable != nil},
 		{ID: "spanner", HealthName: "spanner", Label: "Spanner", Href: "/console/spanner", Icon: "hub", Endpoint: "gRPC (spanner.v1, stub)", Enabled: opts.Spanner != nil},
-		{ID: "iamadmin", HealthName: "iamadmin", Label: "IAM Admin", Href: "/console/iamadmin", Icon: "key", Endpoint: "/v1/projects/*/serviceAccounts", Enabled: opts.IAMAdmin != nil},
+		{ID: iamadminPageID, HealthName: "iamadmin", Label: "IAM Admin", Href: "/console/iamadmin", Icon: "key", Endpoint: "/v1/projects/*/serviceAccounts", Enabled: opts.IAMAdmin != nil},
 	}
 	return s, nil
 }
