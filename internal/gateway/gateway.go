@@ -26,6 +26,7 @@ import (
 	"github.com/GuitarWag/gcp-local/internal/services/cloudrun"
 	"github.com/GuitarWag/gcp-local/internal/services/cloudsql"
 	"github.com/GuitarWag/gcp-local/internal/services/firestore"
+	"github.com/GuitarWag/gcp-local/internal/services/gemini"
 	"github.com/GuitarWag/gcp-local/internal/services/iamadmin"
 	"github.com/GuitarWag/gcp-local/internal/services/iamcredentials"
 	"github.com/GuitarWag/gcp-local/internal/services/kms"
@@ -74,6 +75,7 @@ type Gateway struct {
 	funcs   *cloudrun.Service
 	meta    *metadata.Service
 	iamc    *iamcredentials.Service
+	gem     *gemini.Service
 	iam     *iam.Store
 	iamSA   *iamadmin.Service
 	grpc    *grpc.Server
@@ -264,6 +266,19 @@ func New(cfg *config.Config, build BuildInfo) (*Gateway, error) {
 		g.health.Set(iam.Name(), health.StatusReady)
 	}
 
+	// Gemini is config-driven (fixture replies) and mounts root-path
+	// /v1beta/models patterns; it is enabled when at least one model is
+	// configured, so there is no separate enabled flag to check.
+	gemSvc, err := gemini.New(store, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("init gemini: %w", err)
+	}
+	if gemSvc.Enabled() {
+		g.gem = gemSvc
+		gemSvc.Register(g.mux)
+		g.health.Set(gemSvc.Name(), health.StatusReady)
+	}
+
 	if cfg.Dashboard {
 		copts := console.Options{
 			Version: build.Version,
@@ -326,6 +341,9 @@ func New(cfg *config.Config, build BuildInfo) (*Gateway, error) {
 		if g.sp != nil {
 			copts.Spanner = g.sp
 		}
+		if g.gem != nil {
+			copts.Gemini = g.gem
+		}
 		cs, err := console.New(store, copts)
 		if err != nil {
 			return nil, fmt.Errorf("init console: %w", err)
@@ -346,43 +364,6 @@ func (g *Gateway) dispatchV3(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.NotFound(w, r)
-}
-
-func (g *Gateway) handleReset(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	for _, ns := range []string{
-		"storage/buckets",
-		"pubsub/topics",
-		"pubsub/subscriptions",
-		"secretmanager/secrets",
-		"secretmanager/versions",
-		"tasks/queues",
-		"tasks/tasks",
-		"scheduler/jobs",
-		"kms/keyrings",
-		"kms/cryptokeys",
-		"bigtable/tables",
-		"bigtable/rows",
-		iam.Namespace,
-		iamadmin.NamespaceAccounts,
-		iamadmin.NamespaceKeys,
-	} {
-		all, err := g.store.List(ns, "")
-		if err != nil {
-			http.Error(w, fmt.Sprintf("list %s: %v", ns, err), http.StatusInternalServerError)
-			return
-		}
-		for k := range all {
-			if err := g.store.Delete(ns, k); err != nil {
-				http.Error(w, fmt.Sprintf("delete %s/%s: %v", ns, k, err), http.StatusInternalServerError)
-				return
-			}
-		}
-	}
-	w.WriteHeader(http.StatusNoContent)
 }
 
 func (g *Gateway) dispatchV1(w http.ResponseWriter, r *http.Request) {

@@ -4,9 +4,7 @@ import (
 	"context"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -69,10 +67,10 @@ func TestStorageSeedAndAdminReset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read nested/file.txt: %v", err)
 	}
-	data, _ = io.ReadAll(r)
+	data2, _ := io.ReadAll(r)
 	r.Close()
-	if string(data) != "nested" {
-		t.Errorf("nested/file.txt body = %q", string(data))
+	if string(data2) != "nested" {
+		t.Errorf("nested/file.txt body = %q", string(data2))
 	}
 
 	// reset
@@ -94,61 +92,10 @@ func TestStorageSeedAndAdminReset(t *testing.T) {
 	}
 }
 
-// startWithConfig launches gcp-local with --config and a random free port.
+// startWithConfig launches gcp-local with --config on a random free port.
+// It goes through testutil.StartArgsEnv so coverage builds get GOCOVERDIR
+// and a SIGINT shutdown that flushes counters.
 func startWithConfig(t *testing.T, cfgPath string) *testutil.Emulator {
 	t.Helper()
-	binPath := testutil.BinaryPath(t)
-	port := freePort(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	cmd := exec.CommandContext(ctx, binPath, "start",
-		"--port="+strconv.Itoa(port),
-		"--config="+cfgPath,
-		"--no-daemon",
-	)
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
-	if err := cmd.Start(); err != nil {
-		cancel()
-		t.Fatalf("start: %v", err)
-	}
-	em := &emulatorAdapter{
-		Emulator: &testutil.Emulator{Host: "localhost:" + strconv.Itoa(port), Port: port},
-		cancel:   cancel,
-		cmd:      cmd,
-	}
-	em.waitReady(t)
-	t.Cleanup(em.stop)
-	return em.Emulator
-}
-
-type emulatorAdapter struct {
-	*testutil.Emulator
-	cancel context.CancelFunc
-	cmd    *exec.Cmd
-}
-
-func (e *emulatorAdapter) stop() {
-	if e.cancel != nil {
-		e.cancel()
-	}
-	if e.cmd != nil && e.cmd.Process != nil {
-		_ = e.cmd.Process.Kill()
-		_ = e.cmd.Wait()
-	}
-}
-
-func (e *emulatorAdapter) waitReady(t *testing.T) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		resp, err := defaultClient.Get("http://" + e.Host + "/healthz")
-		if err == nil {
-			resp.Body.Close()
-			if resp.StatusCode == 200 {
-				return
-			}
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	t.Fatal("emulator not ready")
+	return testutil.StartArgsEnv(t, nil, "--config="+cfgPath)
 }

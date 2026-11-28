@@ -11,6 +11,7 @@
 | [Holdout acceptance scenarios between review and merge](20261126-221104-holdout-acceptance-scenarios-between-review-and.md) | accepted | 2026-11-26 | process, factory |
 | [CI guardrails: mechanical checks over written rules](20261126-214345-ci-guardrails-mechanical-checks-over-written.md) | accepted | 2026-11-26 | process, ci |
 | [Autonomous agent factory: label state machine, no human gate](20261126-211742-autonomous-agent-factory-label-state-machine.md) | accepted | 2026-11-26 | process, factory |
+| [Gemini emulator: config-driven fixture engine, no inference](20261126-173401-gemini-emulator-config-driven-fixture-engine.md) | proposed | 2026-11-26 | gemini, engine |
 | [Spanner emulator: SQLite per database, buffered read-write transactions](20261126-162636-spanner-emulator-sqlite-per-database-buffered.md) | accepted | 2026-11-26 | spanner, engine |
 | [Adopt adrlog CLI for architecture decision records](20261125-231025-adopt-adrlog-cli-for-architecture-decision.md) | accepted | 2026-11-25 | process, documentation |
 
@@ -25,14 +26,15 @@ graph TD
   n4["Holdout acceptance scenarios between review and merge"]
   n5["CI guardrails: mechanical checks over written rules"]
   n6["Autonomous agent factory: label state machine, no human gate"]
-  n7["Spanner emulator: SQLite per database, buffered read-write …"]
-  n8["Adopt adrlog CLI for architecture decision records"]
+  n7["Gemini emulator: config-driven fixture engine, no inference"]
+  n8["Spanner emulator: SQLite per database, buffered read-write …"]
+  n9["Adopt adrlog CLI for architecture decision records"]
   n0 --> n6
   n1 --> n3
   n2 --> n6
   n3 --> n6
   n4 --> n6
   n5 --> n6
-  n6 --> n8
-  n7 --> n8
+  n6 --> n9
+  n8 --> n9
 ```
