@@ -22,8 +22,9 @@ import (
 //   The PRD's "process proxy" goal (subprocess per function) is documented as a gap.
 
 const (
-	nsServices  = "cloudrun/services"
-	nsFunctions = "functions/functions"
+	nsServices      = "cloudrun/services"
+	nsFunctions     = "functions/functions"
+	defaultLocation = "us-central1"
 )
 
 type Kind string
@@ -40,6 +41,33 @@ type resource struct {
 	Env        map[string]string `json:"env,omitempty"`
 	CreateTime time.Time         `json:"createTime"`
 	Kind       Kind              `json:"-"`
+	// v1-only fields (serving.knative.dev/v1). v2 responses strip them
+	// through v2View.
+	Spec        json.RawMessage   `json:"spec,omitempty"`
+	Metadata    *v1Metadata       `json:"metadata,omitempty"`
+	Labels      map[string]string `json:"labels,omitempty"`
+	Annotations map[string]string `json:"annotations,omitempty"`
+	Generation  int64             `json:"generation,omitempty"`
+	UID         string            `json:"uid,omitempty"`
+}
+
+// v1Metadata mirrors the k8s ObjectMeta the v1 request body carries.
+type v1Metadata struct {
+	Name        string            `json:"name,omitempty"`
+	Labels      map[string]string `json:"labels,omitempty"`
+	Annotations map[string]string `json:"annotations,omitempty"`
+}
+
+// metadataName extracts the service id from a stored record. A v1 record
+// keeps the id in Metadata.Name; a v2 record uses the top-level Name.
+func (res *resource) metadataName() string {
+	if res.Metadata != nil && res.Metadata.Name != "" {
+		return res.Metadata.Name
+	}
+	if idx := strings.LastIndex(res.Name, "/"); idx >= 0 {
+		return res.Name[idx+1:]
+	}
+	return res.Name
 }
 
 type Service struct {
@@ -153,7 +181,7 @@ func (s *Service) collection(w http.ResponseWriter, r *http.Request, parts []str
 		for _, v := range all {
 			var r resource
 			if json.Unmarshal(v, &r) == nil {
-				items = append(items, r)
+				items = append(items, v2View(r))
 			}
 		}
 		writeJSON(w, http.StatusOK, map[string]any{s.collectionSeg(): items})
@@ -171,9 +199,12 @@ func (s *Service) item(w http.ResponseWriter, r *http.Request, parts []string) {
 			writeErr(w, http.StatusNotFound, "not found")
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(data)
+		var res resource
+		if json.Unmarshal(data, &res) != nil {
+			writeErr(w, http.StatusInternalServerError, "stored record decode failed")
+			return
+		}
+		writeJSON(w, http.StatusOK, v2View(res))
 	case http.MethodDelete:
 		if err := s.store.Delete(s.ns, name); err != nil {
 			writeErr(w, http.StatusNotFound, "not found")

@@ -46,6 +46,9 @@ func (g *Gateway) dispatchV1(w http.ResponseWriter, r *http.Request) {
 	if g.svcu != nil {
 		handlers = append(handlers, g.svcu.HandleV1)
 	}
+	if g.run != nil {
+		handlers = append(handlers, g.run.HandleV1)
+	}
 	for _, h := range handlers {
 		if h(w, r, parts) {
 			return
