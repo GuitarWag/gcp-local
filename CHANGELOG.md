@@ -8,6 +8,20 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.14.2] - 2026-11-28
+
+### Changed
+
+- Split the remaining `internal/services/bigquery/bigquery.go` by area: table endpoints move to `tables.go` and query processing to `query.go`; `bigquery.go` is deleted. Wire shapes, error bodies and behaviour are unchanged. Part of #62.
+
+- Split the remaining `internal/services/pubsub/pubsub.go` by area: subscription and pull endpoints move to `subscriber.go`, push delivery to `push.go`; `pubsub.go` is deleted. Wire shapes, error bodies and behaviour are unchanged. Part of #62.
+
+- Split `internal/services/pubsub/pubsub.go` by area: wire types move to `types.go`, service wiring to `service.go`, topic and publish endpoints to `publisher.go`. Wire shapes, error bodies and behaviour are unchanged. Part of #62.
+
+- **Storage internals regrouped.** No behaviour change. The upload and
+  resumable-session code moved from `objects.go` into `upload.go` and
+  `resumable.go` to keep every file in the package under the size limit.
+
 ## [0.14.1] - 2026-11-28
 
 ### Changed
@@ -757,7 +771,8 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.14.1...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.14.2...HEAD
+[0.14.2]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.14.2
 [0.14.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.14.1
 [0.14.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.14.0
 [0.13.5]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.5
