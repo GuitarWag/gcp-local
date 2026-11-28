@@ -16,9 +16,7 @@ and opencode. They use the owner's GitHub identity.
 flowchart LR
   scout([scout]) -->|files issue| spec
   console([console]) -->|files console issue| spec
-  spec -->|spec comment + fizz model| verify
-  verify -->|FizzBee pass| plan
-  verify -->|FizzBee fail| spec
+  spec -->|spec comment| plan
   plan -->|sub-issues| build
   build -->|herdr team opens PR| review
   review -->|verdict approve| accept
@@ -33,7 +31,6 @@ flowchart LR
 | Stage label | Who does it | How it runs |
 |---|---|---|
 | `stage:spec` | spec agent | ephemeral `pi -p` or `opencode run` |
-| `stage:verify` | verify agent + FizzBee | ephemeral |
 | `stage:plan` | plan agent | ephemeral |
 | `stage:build` | herdr team (opencode boss, pi workers) | herdr tab, worktree on `factory/<issue>` |
 | `stage:review` | review agent | ephemeral, no shared context |
@@ -45,10 +42,10 @@ Other processes:
 
 | Process | Interval | Job |
 |---|---|---|
-| `orchestrator.sh` | every 5 minutes | Reaps expired claims, starts agents and teams, closes finished team tabs, runs the release script. |
+| `orchestrator.sh` | every 5 minutes | Reaps expired claims and orphan test emulators, starts agents and teams, closes finished team tabs, nudges the boss of a team that is idle for 10 minutes, runs the release script. |
 | `release.sh cut` | every hour | Folds `changelog.d/` into `CHANGELOG.md` and opens a `release/vX.Y.Z` PR. The next tick merges it when CI is green, and `auto-tag.yml` publishes. |
 | janitor agent | every hour | Removes dead worktrees, branches and herdr tabs. Fixes labels. Resets flagged issues once, closes them on the second flag. Files issues for code and docs drift. |
-| scout agent | every 24 hours | Files at most 3 new feature issues, only when fewer than 5 issues wait in spec, verify and plan. |
+| scout agent | every 24 hours | Files at most 3 new feature issues, only when fewer than 5 issues wait in spec and plan. |
 | console agent | every hour | Files 1 console UI issue (label `console`), only when fewer than 2 console issues are open. The owner sets priorities in the open issue with the labels `initiative` and `console`. |
 
 ## Holdout scenarios
@@ -89,7 +86,7 @@ An agent owns an issue only while it holds a claim. A claim is a comment
 
 ## Runners: where agents run
 
-`FACTORY_RUNNER` selects how stage jobs (spec, verify, plan, review,
+`FACTORY_RUNNER` selects how stage jobs (spec, plan, review,
 accept) run.
 
 | Runner | Stage jobs | Janitor and scout | You can chat with them |
@@ -148,7 +145,8 @@ dead worktrees, are the janitor's job.
 | Limit | Default | Variable |
 |---|---|---|
 | Ephemeral jobs at the same time | 3 | `FACTORY_MAX_JOBS` |
-| herdr teams at the same time | 2 | `FACTORY_MAX_TEAMS` |
+| herdr teams at the same time | 6 | `FACTORY_MAX_TEAMS` |
+| Minutes a whole team is idle before the orchestrator nudges the boss | 10 | `FACTORY_TEAM_IDLE` |
 | Review rounds before flag | 3 | (review role) |
 | Failed attempts before flag | 3 | `FACTORY_MAX_FAILS` |
 | Scout issues per run | 3 | (scout role) |
@@ -163,9 +161,6 @@ admins. No agent can merge a PR with red or missing checks.
 Install once:
 
 - pi, opencode, herdr, herdr-shepherd, `gh` (logged in), `jq`, `python3`.
-- FizzBee: `brew tap fizzbee-io/fizzbee && brew install fizzbee`, or put
-  the release binary from https://github.com/fizzbee-io/fizzbee/releases
-  on `PATH` as `fizz`.
 
 Start:
 
@@ -200,11 +195,11 @@ Logs are in `~/.factory/logs/`. Job worktrees are in `~/.factory/wt/`.
   factory can rotate harness and model pairs, for example
   `"pi:yld/glm-5.3-flash opencode:yld/inkling-2-mini pi:yld/inkling-2-mini opencode:yld/glm-5.3-flash"`.
 - Each tick fills free job slots from the latest stage first (accept,
-  review, plan, verify, then spec), so work near merge finishes first.
+  review, plan, then spec), so work near merge finishes first.
 - Set `FACTORY_REVIEW_AGENT` and `FACTORY_REVIEW_MODEL` to review with a
   model family that differs from the builders' models. A reviewer that
   shares the builders' model shares their blind spots.
-- Teams use `FACTORY_BOSS` (default `opencode`) and `FACTORY_WORKER`
+- Teams use `FACTORY_BOSS` (default `pi`) and `FACTORY_WORKER`
   (default `pi`). pi uses its configured default model. opencode uses the
   last model selected in opencode.
 

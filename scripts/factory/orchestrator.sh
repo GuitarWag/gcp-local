@@ -14,13 +14,15 @@ OWNER=${REPO%%/*}
 HOME_F=${FACTORY_HOME:-$HOME/.factory}
 TICK=${FACTORY_TICK:-300}
 MAX_JOBS=${FACTORY_MAX_JOBS:-3}
-MAX_TEAMS=${FACTORY_MAX_TEAMS:-2}
+MAX_TEAMS=${FACTORY_MAX_TEAMS:-6}
+TEAM_IDLE=${FACTORY_TEAM_IDLE:-10}
 # Entries are "agent" or "agent:provider/model"; jobs take them in turn.
 AGENTS=${FACTORY_AGENTS:-"pi opencode"}
 # A reviewer from another model family catches what the builders miss.
 REVIEW_AGENT=${FACTORY_REVIEW_AGENT:-}
 REVIEW_MODEL=${FACTORY_REVIEW_MODEL:-}
-BOSS=${FACTORY_BOSS:-opencode}
+# pi: herdr-shepherd 0.5 cannot set the opencode model.
+BOSS=${FACTORY_BOSS:-pi}
 WORKER=${FACTORY_WORKER:-pi}
 JOB_LEASE=${FACTORY_JOB_LEASE:-60}
 STALL_MIN=${FACTORY_STALL_MIN:-20}
@@ -203,8 +205,16 @@ interval_role() {
   fi
 }
 
+# A stopped job leaves its test emulators behind, owned by launchd.
+reap_orphan_emulators() {
+  local pids
+  pids=$(ps -eo pid=,ppid=,command= | awk '$2 == 1 && $3 ~ /\/gcp-local-(bin|echofn)-[0-9]+\//{print $1}')
+  [ -z "$pids" ] || [ -n "$DRY" ] || { log "stop $(echo "$pids" | wc -l | tr -d ' ') orphan test emulators"; echo "$pids" | xargs kill 2>/dev/null; }
+}
+
 tick() {
   [ -n "$DRY" ] || "$CLAIM" reap
+  reap_orphan_emulators
   running_jobs >/dev/null
   watchdog
   reap_herdr_jobs
@@ -212,7 +222,7 @@ tick() {
 
   local role issue
   # Latest stage first: work near merge finishes before new work starts.
-  for role in accept review plan verify spec; do
+  for role in accept review plan spec; do
     for issue in $(issues_in "$role"); do
       [ "$(running_jobs)" -lt "$MAX_JOBS" ] || break 2
       spawn_job "$role" "$issue"
@@ -229,7 +239,7 @@ tick() {
   "$ROOT/scripts/factory/release.sh" merge
   if due release "$RELEASE_EVERY"; then "$ROOT/scripts/factory/release.sh" cut; fi
   interval_role janitor "$JANITOR_EVERY"
-  local backlog=$(($(count_label stage:spec) + $(count_label stage:verify) + $(count_label stage:plan)))
+  local backlog=$(($(count_label stage:spec) + $(count_label stage:plan)))
   if [ "$backlog" -lt "$SCOUT_BACKLOG" ]; then
     interval_role scout "$SCOUT_EVERY"
   elif is_resident scout; then

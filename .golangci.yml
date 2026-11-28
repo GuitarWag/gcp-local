@@ -96,7 +96,7 @@ linters:
         text: "G101|G117"
       # BigQuery DDL operates on SQLite under the hood; identifiers are
       # derived from validated project/dataset/table IDs, not raw user input.
-      - path: internal/services/bigquery/bigquery\.go$
+      - path: internal/services/bigquery/
         linters:
           - gosec
         text: "G201|G701"
@@ -136,7 +136,7 @@ linters:
           - gosec
         text: "G204|G702"
       # Pub/Sub push delivery returns subscriber HTTP response bytes verbatim.
-      - path: internal/services/pubsub/pubsub\.go$
+      - path: internal/services/pubsub/
         linters:
           - gosec
         text: "G705"

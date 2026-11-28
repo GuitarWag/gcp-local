@@ -91,10 +91,10 @@ cut() {
     ver=$(python3 -I scripts/factory/changelog.py .) || exit 1
     log "cut v$ver"
     [ -n "$DRY" ] && { git diff --stat; exit 0; }
-    git switch -q -c "release/v$ver" &&
+    git switch -q -C "release/v$ver" &&
       git add -A &&
       git commit -q -m "chore(release): v$ver" &&
-      git push -q -u origin "release/v$ver" &&
+      git push -q -f -u origin "release/v$ver" &&
       gh pr create -R "$REPO" --base main --head "release/v$ver" --label release \
         --title "chore(release): v$ver" \
         --body "Release v$ver. Folds the changelog fragments on \`main\` into \`CHANGELOG.md\`. The merge triggers \`auto-tag.yml\`."

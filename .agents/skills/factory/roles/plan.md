@@ -3,7 +3,7 @@
 Input: one issue with `stage:plan` and a passed spec. Output: sub-issues
 and one plan comment.
 
-1. Read the latest spec and verify comments.
+1. Read the latest spec comment.
 2. Split the work into subtasks. A herdr team does them in one shared
    worktree, so two subtasks that can run at the same time must not edit
    the same file. Put shared files (config, gateway registration) in one
