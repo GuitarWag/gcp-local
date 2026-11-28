@@ -33,6 +33,10 @@ func runPidCmd(t *testing.T, bin, home string, args ...string) (string, int) {
 	t.Helper()
 	cmd := exec.Command(bin, args...)
 	cmd.Env = append(os.Environ(), "HOME="+home)
+	// Coverage build: the child must flush counters to the same dir.
+	if dir := os.Getenv("GCP_LOCAL_COVERDIR"); dir != "" {
+		cmd.Env = append(cmd.Env, "GOCOVERDIR="+dir)
+	}
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
