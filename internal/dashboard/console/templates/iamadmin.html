@@ -1,0 +1,28 @@
+{{define "content"}}
+<div class="split">
+  <div class="col">
+    <h3>Service Accounts</h3>
+    <ul id="accounts" class="kv"></ul>
+    <h3>Create Service Account</h3>
+    <form id="create-form">
+      <label>account id<input name="accountId" required placeholder="my-service-account"></label>
+      <label>display name<input name="displayName" placeholder="My Service Account"></label>
+      <label>description<input name="description" placeholder="optional"></label>
+      <button type="submit">Create</button>
+    </form>
+    <pre class="payload" id="create-out" hidden></pre>
+  </div>
+  <div class="col">
+    <h3 id="keys-title">Keys</h3>
+    <table class="compact">
+      <thead><tr><th>Key ID</th><th>Algorithm</th><th>Type</th><th>Valid After</th><th>Valid Before</th><th></th></tr></thead>
+      <tbody id="keys"></tbody>
+    </table>
+    <h3>Create Key</h3>
+    <form id="create-key-form">
+      <button type="submit">Create Key</button>
+    </form>
+    <pre class="payload" id="create-key-out" hidden></pre>
+  </div>
+</div>
+{{end}}
