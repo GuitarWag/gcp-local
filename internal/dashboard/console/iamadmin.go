@@ -57,6 +57,8 @@ window.__page = function () {
         });
         var li = gcp.el('li', { 'data-key': a.email, text: a.email }, [delBtn]);
         if (a.displayName) li.appendChild(gcp.el('small', { text: a.displayName }));
+        if (a.uniqueId) li.appendChild(gcp.el('small', { text: a.uniqueId }));
+        if (a.description) li.appendChild(gcp.el('small', { text: a.description }));
         li.style.cursor = 'pointer';
         li.addEventListener('click', function () {
           state.email = a.email;
@@ -127,7 +129,12 @@ window.__page = function () {
     });
   });
 
-  loadAccounts();
+  gcp.poll(function () {
+    return loadAccounts().then(function () {
+      setActive(accountsEl, state.email);
+      if (state.email) return loadKeys();
+    });
+  }, 3000);
 };
 `
 
@@ -213,7 +220,7 @@ func (s *Service) apiIAMAdminKeys(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if key != "" {
-			s.apiIAMAdminCredentials(w, r, key)
+			writeErr(w, http.StatusBadRequest, "key parameter not supported")
 			return
 		}
 		keys, err := s.opts.IAMAdmin.ConsoleKeys(account)
@@ -249,7 +256,7 @@ func (s *Service) apiIAMAdminKeys(w http.ResponseWriter, r *http.Request) {
 }
 
 // apiIAMAdminCredentials serves the decoded credentials file. keyID comes
-// from the sub-path form /keys/<key>/credentials or the ?key= query.
+// from the sub-path form /keys/<key>/credentials.
 func (s *Service) apiIAMAdminCredentials(w http.ResponseWriter, r *http.Request, keyID string) {
 	account := r.URL.Query().Get("account")
 	if r.Method != http.MethodGet {
