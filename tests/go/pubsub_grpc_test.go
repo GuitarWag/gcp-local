@@ -2,6 +2,7 @@ package gcplocaltest
 
 import (
 	"context"
+	"net/http"
 	"sync"
 	"testing"
 	"time"
@@ -88,5 +89,59 @@ func TestPubSubGRPCPublishAndReceive(t *testing.T) {
 	}
 	if !((received[0] == "alpha" && received[1] == "beta") || (received[0] == "beta" && received[1] == "alpha")) {
 		t.Errorf("unexpected messages: %v", received)
+	}
+}
+
+// TestPubSubGRPCGetSubscriptionPushConfig covers the provider path (REST
+// create with a pushConfig) read back through the SDK path (gRPC
+// GetSubscription). The real API keeps pushConfig in the gRPC response.
+func TestPubSubGRPCGetSubscriptionPushConfig(t *testing.T) {
+	em := testutil.Start(t)
+	client := newPubSubClient(t, em)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if _, err := client.CreateTopic(ctx, "push-topic"); err != nil {
+		t.Fatalf("create topic: %v", err)
+	}
+	base := "http://" + em.Host + "/v1/projects/" + project
+	topicName := "projects/" + project + "/topics/push-topic"
+
+	pushBody := map[string]any{
+		"topic":              topicName,
+		"ackDeadlineSeconds": 10,
+		"pushConfig":         map[string]any{"pushEndpoint": "https://example.com/push"},
+	}
+	resp, body := doJSON(t, http.MethodPut, base+"/subscriptions/push-sub", pushBody)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("create push subscription: %d %s", resp.StatusCode, body)
+	}
+
+	pullBody := map[string]any{
+		"topic":              topicName,
+		"ackDeadlineSeconds": 10,
+	}
+	resp, body = doJSON(t, http.MethodPut, base+"/subscriptions/pull-sub", pullBody)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("create pull subscription: %d %s", resp.StatusCode, body)
+	}
+
+	pushSub := client.Subscription("push-sub")
+	cfg, err := pushSub.Config(ctx)
+	if err != nil {
+		t.Fatalf("push sub config: %v", err)
+	}
+	if cfg.PushConfig.Endpoint != "https://example.com/push" {
+		t.Errorf("push endpoint over gRPC = %q, want %q", cfg.PushConfig.Endpoint, "https://example.com/push")
+	}
+
+	pullSub := client.Subscription("pull-sub")
+	cfg, err = pullSub.Config(ctx)
+	if err != nil {
+		t.Fatalf("pull sub config: %v", err)
+	}
+	if cfg.PushConfig.Endpoint != "" {
+		t.Errorf("pull sub push endpoint over gRPC = %q, want empty", cfg.PushConfig.Endpoint)
 	}
 }
