@@ -5,298 +5,15 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
-	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/GuitarWag/gcp-local/internal/config"
-	"github.com/GuitarWag/gcp-local/internal/httpresp"
-	"github.com/GuitarWag/gcp-local/internal/state"
 )
-
-const (
-	nsTopics        = "pubsub/topics"
-	nsSubscriptions = "pubsub/subscriptions"
-)
-
-var (
-	ErrAlreadyExists = errors.New("already exists")
-	ErrTopicMissing  = errors.New("topic missing")
-	ErrSubMissing    = errors.New("subscription missing")
-)
-
-type topicResource struct {
-	Name string `json:"name"`
-}
-
-type subscriptionResource struct {
-	Name               string      `json:"name"`
-	Topic              string      `json:"topic"`
-	AckDeadlineSeconds int         `json:"ackDeadlineSeconds"`
-	PushConfig         *pushConfig `json:"pushConfig,omitempty"`
-}
-
-type pushConfig struct {
-	PushEndpoint string `json:"pushEndpoint"`
-}
-
-type publishRequest struct {
-	Messages []pubsubMessage `json:"messages"`
-}
-
-type pubsubMessage struct {
-	Data        string            `json:"data,omitempty"`
-	Attributes  map[string]string `json:"attributes,omitempty"`
-	MessageID   string            `json:"messageId,omitempty"`
-	PublishTime time.Time         `json:"publishTime,omitempty"`
-	OrderingKey string            `json:"orderingKey,omitempty"`
-}
-
-type publishResponse struct {
-	MessageIDs []string `json:"messageIds"`
-}
-
-type pullRequest struct {
-	ReturnImmediately bool `json:"returnImmediately"`
-	MaxMessages       int  `json:"maxMessages"`
-}
-
-type pullResponse struct {
-	ReceivedMessages []receivedMessage `json:"receivedMessages"`
-}
-
-type receivedMessage struct {
-	AckID   string        `json:"ackId"`
-	Message pubsubMessage `json:"message"`
-}
-
-type ackRequest struct {
-	AckIDs []string `json:"ackIds"`
-}
-
-type storedMessage struct {
-	AckID    string        `json:"ackId"`
-	Message  pubsubMessage `json:"message"`
-	Inflight bool          `json:"-"`
-	Deadline time.Time     `json:"-"`
-}
-
-func (m *storedMessage) available(now time.Time) bool {
-	return !m.Inflight || now.After(m.Deadline)
-}
-
-type Service struct {
-	store   state.Store
-	project string
-
-	mu     sync.Mutex
-	queues map[string][]storedMessage // subscription name -> messages
-
-	msgSeq uint64
-	ackSeq uint64
-
-	// Push delivery: one goroutine per push subscription. pushers maps
-	// subscription name to its cancel func so DeleteSubscription / Stop can
-	// reach in and tear individual workers down.
-	pushClient *http.Client
-	ctx        context.Context
-	cancel     context.CancelFunc
-	pushWG     sync.WaitGroup
-	pushMu     sync.Mutex
-	pushers    map[string]context.CancelFunc
-	pushPoll   time.Duration // poll interval; small constant in production, tunable in tests
-}
-
-func New(store state.Store, cfg *config.Config) (*Service, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-	s := &Service{
-		store:      store,
-		project:    cfg.Project,
-		queues:     map[string][]storedMessage{},
-		pushClient: &http.Client{Timeout: 5 * time.Second},
-		ctx:        ctx,
-		cancel:     cancel,
-		pushers:    map[string]context.CancelFunc{},
-		pushPoll:   50 * time.Millisecond,
-	}
-	for _, t := range cfg.Services.PubSub.Topics {
-		topicName := fmt.Sprintf("projects/%s/topics/%s", cfg.Project, t.Name)
-		if err := s.putTopic(topicName); err != nil {
-			return nil, fmt.Errorf("seed topic %s: %w", t.Name, err)
-		}
-		for _, sub := range t.Subscriptions {
-			subName := fmt.Sprintf("projects/%s/subscriptions/%s", cfg.Project, sub.Name)
-			res := subscriptionResource{
-				Name:               subName,
-				Topic:              topicName,
-				AckDeadlineSeconds: 10,
-			}
-			if sub.PushEndpoint != "" {
-				res.PushConfig = &pushConfig{PushEndpoint: sub.PushEndpoint}
-			}
-			if err := s.putSubscription(res); err != nil {
-				return nil, fmt.Errorf("seed subscription %s: %w", sub.Name, err)
-			}
-			if res.PushConfig != nil {
-				s.startPusher(res)
-			}
-		}
-	}
-	return s, nil
-}
-
-// Stop cancels all push-delivery goroutines and waits for them to exit.
-// Safe to call once; subsequent calls are no-ops because cancel idempotently
-// closes the context.
-func (s *Service) Stop() {
-	if s.cancel != nil {
-		s.cancel()
-	}
-	s.pushWG.Wait()
-}
-
-func (s *Service) Name() string { return "pubsub" }
-
-func (s *Service) Register(_ *http.ServeMux) {
-	// V1 routes are dispatched centrally by the gateway via HandleV1.
-}
-
-// HandleV1 handles /v1/projects/{p}/(topics|subscriptions)/... segments.
-// `parts` is the path split at "/", starting with "projects".
-func (s *Service) HandleV1(w http.ResponseWriter, r *http.Request, parts []string) bool {
-	if len(parts) < 4 {
-		return false
-	}
-	kind := parts[2]
-	if kind != "topics" && kind != "subscriptions" {
-		return false
-	}
-	s.dispatch(w, r)
-	return true
-}
-
-func (s *Service) writeJSON(w http.ResponseWriter, code int, v any) {
-	httpresp.JSON(w, code, v)
-}
-
-func (s *Service) writeErr(w http.ResponseWriter, code int, msg string) {
-	s.writeJSON(w, code, map[string]any{
-		"error": map[string]any{"code": code, "message": msg},
-	})
-}
-
-// dispatch routes /v1/projects/{project}/{topics|subscriptions}/{name}[:action]
-func (s *Service) dispatch(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/v1/")
-	parts := strings.SplitN(path, "/", 4)
-	if len(parts) < 4 {
-		s.writeErr(w, http.StatusNotFound, "not found")
-		return
-	}
-	// parts: ["projects", "{project}", "topics|subscriptions", "{name}[:action]"]
-	kind := parts[2]
-	resourceFull := fmt.Sprintf("%s/%s/%s/%s", parts[0], parts[1], parts[2], parts[3])
-
-	// strip :action suffix
-	resourceName := resourceFull
-	action := ""
-	if idx := strings.LastIndex(parts[3], ":"); idx >= 0 {
-		action = parts[3][idx+1:]
-		name := parts[3][:idx]
-		resourceName = fmt.Sprintf("%s/%s/%s/%s", parts[0], parts[1], parts[2], name)
-	}
-
-	switch kind {
-	case "topics":
-		s.handleTopic(w, r, resourceName, action)
-	case "subscriptions":
-		s.handleSubscription(w, r, resourceName, action)
-	default:
-		s.writeErr(w, http.StatusNotFound, "unknown resource: "+kind)
-	}
-}
-
-func (s *Service) handleTopic(w http.ResponseWriter, r *http.Request, name, action string) {
-	if action == "publish" {
-		if r.Method != http.MethodPost {
-			s.writeErr(w, http.StatusMethodNotAllowed, "method not allowed")
-			return
-		}
-		s.publish(w, r, name)
-		return
-	}
-	switch r.Method {
-	case http.MethodPut:
-		if err := s.putTopic(name); err != nil {
-			s.writeErr(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		s.writeJSON(w, http.StatusOK, topicResource{Name: name})
-	case http.MethodGet:
-		if _, err := s.store.Get(nsTopics, name); err != nil {
-			s.writeErr(w, http.StatusNotFound, "topic not found")
-			return
-		}
-		s.writeJSON(w, http.StatusOK, topicResource{Name: name})
-	case http.MethodDelete:
-		if err := s.store.Delete(nsTopics, name); err != nil {
-			if errors.Is(err, state.ErrNotFound) {
-				s.writeErr(w, http.StatusNotFound, "topic not found")
-				return
-			}
-			s.writeErr(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	default:
-		s.writeErr(w, http.StatusMethodNotAllowed, "method not allowed")
-	}
-}
-
-func (s *Service) putTopic(name string) error {
-	t := topicResource{Name: name}
-	data, _ := json.Marshal(t)
-	return s.store.Put(nsTopics, name, data)
-}
-
-// ---- Pure-Go API used by both REST and gRPC layers ----
-
-type Message struct {
-	ID          string
-	Data        []byte
-	Attributes  map[string]string
-	OrderingKey string
-	PublishTime time.Time
-}
 
 type Received struct {
 	AckID   string
 	Message Message
-}
-
-func (s *Service) CreateTopic(name string) error {
-	if _, err := s.store.Get(nsTopics, name); err == nil {
-		return ErrAlreadyExists
-	}
-	return s.putTopic(name)
-}
-
-func (s *Service) GetTopic(name string) (bool, error) {
-	if _, err := s.store.Get(nsTopics, name); err != nil {
-		if errors.Is(err, state.ErrNotFound) {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, nil
-}
-
-func (s *Service) DeleteTopic(name string) error {
-	return s.store.Delete(nsTopics, name)
 }
 
 func (s *Service) CreateSubscription(name, topic string, ackDeadline int, pushURL string) error {
@@ -345,39 +62,6 @@ func (s *Service) DeleteSubscription(name string) error {
 	delete(s.queues, name)
 	s.mu.Unlock()
 	return nil
-}
-
-func (s *Service) PublishMessages(topic string, msgs []Message) ([]string, error) {
-	if _, err := s.store.Get(nsTopics, topic); err != nil {
-		return nil, ErrTopicMissing
-	}
-	subs, err := s.subsForTopic(topic)
-	if err != nil {
-		return nil, err
-	}
-	ids := make([]string, 0, len(msgs))
-	for i := range msgs {
-		id := fmt.Sprintf("msg-%d", atomic.AddUint64(&s.msgSeq, 1))
-		msgs[i].ID = id
-		msgs[i].PublishTime = time.Now().UTC()
-		ids = append(ids, id)
-	}
-	s.mu.Lock()
-	for _, sub := range subs {
-		for _, m := range msgs {
-			ackID := fmt.Sprintf("ack-%d", atomic.AddUint64(&s.ackSeq, 1))
-			stored := storedMessage{AckID: ackID, Message: pubsubMessage{
-				Data:        base64.StdEncoding.EncodeToString(m.Data),
-				Attributes:  m.Attributes,
-				MessageID:   m.ID,
-				PublishTime: m.PublishTime,
-				OrderingKey: m.OrderingKey,
-			}}
-			s.queues[sub.Name] = append(s.queues[sub.Name], stored)
-		}
-	}
-	s.mu.Unlock()
-	return ids, nil
 }
 
 func (s *Service) PullMessages(subName string, limit int) ([]Received, error) {
@@ -483,18 +167,6 @@ func (s *Service) ModifyAckDeadline(subName string, ackIDs []string, sec int) er
 	return nil
 }
 
-func (s *Service) ListTopics(projectPrefix string) ([]string, error) {
-	all, err := s.store.List(nsTopics, projectPrefix)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]string, 0, len(all))
-	for k := range all {
-		out = append(out, k)
-	}
-	return out, nil
-}
-
 func (s *Service) ListSubscriptions(projectPrefix string) ([]string, error) {
 	all, err := s.store.List(nsSubscriptions, projectPrefix)
 	if err != nil {
@@ -587,51 +259,6 @@ func (s *Service) putSubscription(sub subscriptionResource) error {
 	return s.store.Put(nsSubscriptions, sub.Name, data)
 }
 
-func (s *Service) publish(w http.ResponseWriter, r *http.Request, topic string) {
-	var body publishRequest
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		s.writeErr(w, http.StatusBadRequest, "invalid json")
-		return
-	}
-	msgs := make([]Message, 0, len(body.Messages))
-	for _, m := range body.Messages {
-		raw, _ := base64.StdEncoding.DecodeString(m.Data)
-		msgs = append(msgs, Message{
-			Data:        raw,
-			Attributes:  m.Attributes,
-			OrderingKey: m.OrderingKey,
-		})
-	}
-	ids, err := s.PublishMessages(topic, msgs)
-	if err != nil {
-		if errors.Is(err, ErrTopicMissing) {
-			s.writeErr(w, http.StatusNotFound, "topic not found")
-			return
-		}
-		s.writeErr(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	s.writeJSON(w, http.StatusOK, publishResponse{MessageIDs: ids})
-}
-
-func (s *Service) subsForTopic(topic string) ([]subscriptionResource, error) {
-	all, err := s.store.List(nsSubscriptions, "")
-	if err != nil {
-		return nil, err
-	}
-	var out []subscriptionResource
-	for _, v := range all {
-		var sub subscriptionResource
-		if err := json.Unmarshal(v, &sub); err != nil {
-			continue
-		}
-		if sub.Topic == topic {
-			out = append(out, sub)
-		}
-	}
-	return out, nil
-}
-
 func (s *Service) pull(w http.ResponseWriter, r *http.Request, subName string) {
 	var body pullRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -686,21 +313,6 @@ func (s *Service) modifyAckDeadline(w http.ResponseWriter, r *http.Request, subN
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-}
-
-// DecodeData is exposed for tests; pub/sub message bodies are base64 in the REST API.
-func DecodeData(s string) ([]byte, error) {
-	return base64.StdEncoding.DecodeString(s)
-}
-
-// pushEnvelope mirrors the real Pub/Sub push payload:
-//
-//	{"message": {<PubsubMessage>}, "subscription": "<full sub name>"}
-//
-// see https://cloud.google.com/pubsub/docs/push#receive_push.
-type pushEnvelope struct {
-	Message      pubsubMessage `json:"message"`
-	Subscription string        `json:"subscription"`
 }
 
 // startPusher launches the per-subscription delivery goroutine. Safe to call
