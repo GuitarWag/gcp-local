@@ -13,6 +13,14 @@ const (
 	tablesSeg = "tables"
 )
 
+// BigQuery type names shared by schema translation and query results.
+const (
+	bqTypeString  = "STRING"
+	bqTypeInteger = "INTEGER"
+	bqTypeFloat   = "FLOAT"
+	bqTypeBoolean = "BOOLEAN"
+)
+
 type dataset struct {
 	ID         string    `json:"datasetId"`
 	Kind       string    `json:"kind"`
