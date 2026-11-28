@@ -8,6 +8,14 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.14.3] - 2026-11-28
+
+### Changed
+
+- **Docs refreshed by the janitor.** README test counts match the suites
+  now (141 Go, 28 Python, 24 TypeScript, 193 total), and the AGENTS.md
+  layout lists the `serviceusage` service package. Closes #179.
+
 ## [0.14.2] - 2026-11-28
 
 ### Changed
@@ -771,7 +779,8 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.14.2...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.14.3...HEAD
+[0.14.3]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.14.3
 [0.14.2]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.14.2
 [0.14.1]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.14.1
 [0.14.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.14.0
