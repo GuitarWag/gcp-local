@@ -9,10 +9,10 @@
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@types/pg": "8.20.0",
-    "mysql2": "3.22.3",
+    "mysql2": "3.23.1",
     "pg": "8.20.0",
     "typescript": "^5.4.0",
-    "vitest": "^1.6.0"
+    "vitest": "^4.1.12"
   },
   "dependencies": {
     "@google-cloud/firestore": "^7.10.0",
