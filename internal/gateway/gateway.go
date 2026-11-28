@@ -18,7 +18,6 @@ import (
 
 	"github.com/GuitarWag/gcp-local/internal/config"
 	"github.com/GuitarWag/gcp-local/internal/dashboard"
-	"github.com/GuitarWag/gcp-local/internal/dashboard/console"
 	"github.com/GuitarWag/gcp-local/internal/health"
 	"github.com/GuitarWag/gcp-local/internal/iam"
 	"github.com/GuitarWag/gcp-local/internal/services/bigquery"
@@ -96,8 +95,7 @@ func New(cfg *config.Config, build BuildInfo) (*Gateway, error) {
 		iam:    iam.NewStore(store),
 		grpc:   grpc.NewServer(grpc.StatsHandler(otelgrpc.NewServerHandler())),
 	}
-	g.iamSA = iamadmin.New(store, cfg)
-	g.health.Set(g.iamSA.Name(), health.StatusReady)
+	g.initIAMAdmin(cfg, store)
 
 	g.mux.HandleFunc("/healthz", g.health.Handler())
 	g.mux.HandleFunc("/admin/reset", g.handleReset)
@@ -108,229 +106,34 @@ func New(cfg *config.Config, build BuildInfo) (*Gateway, error) {
 	g.mux.HandleFunc("/v2/projects/", g.dispatchV2)
 	g.mux.HandleFunc("/v3/projects/", g.dispatchV3)
 
-	if cfg.Services.Storage.Enabled {
-		svc, err := storage.New(store, cfg, g.iam)
-		if err != nil {
-			return nil, fmt.Errorf("init storage: %w", err)
+	// Helpers run in construction order, so the health registry
+	// order is unchanged.
+	for _, initSvc := range []func(*config.Config, state.Store) error{
+		g.initStorage,
+		g.initPubSub,
+		g.initSecretManager,
+		g.initTasks,
+		g.initScheduler,
+		g.initKMS,
+		g.initLogging,
+		g.initMonitoring,
+		g.initFirestore,
+		g.initBigQuery,
+		g.initBigtable,
+		g.initSpanner,
+		g.initMemorystore,
+		g.initCloudSQL,
+		g.initCloudRun,
+		g.initFunctions,
+		g.initMetadata,
+	} {
+		if err := initSvc(cfg, store); err != nil {
+			return nil, err
 		}
-		g.storage = svc
-		g.health.Set(svc.Name(), health.StatusStarting)
-		svc.Register(g.mux)
-		g.health.Set(svc.Name(), health.StatusReady)
-	}
-	if cfg.Services.PubSub.Enabled {
-		svc, err := pubsub.New(store, cfg)
-		if err != nil {
-			return nil, fmt.Errorf("init pubsub: %w", err)
-		}
-		g.pubsub = svc
-		g.health.Set(svc.Name(), health.StatusStarting)
-		svc.Register(g.mux)
-		svc.RegisterGRPC(g.grpc)
-		g.health.Set(svc.Name(), health.StatusReady)
-	}
-	if cfg.Services.SecretManager.Enabled {
-		svc, err := secretmanager.New(store, cfg)
-		if err != nil {
-			return nil, fmt.Errorf("init secretmanager: %w", err)
-		}
-		g.sm = svc
-		g.health.Set(svc.Name(), health.StatusReady)
-	}
-	if cfg.Services.Tasks.Enabled {
-		svc, err := tasks.New(store, cfg)
-		if err != nil {
-			return nil, fmt.Errorf("init tasks: %w", err)
-		}
-		g.tasks = svc
-		g.health.Set(svc.Name(), health.StatusReady)
-	}
-	if cfg.Services.Scheduler.Enabled {
-		svc, err := scheduler.New(store, cfg)
-		if err != nil {
-			return nil, fmt.Errorf("init scheduler: %w", err)
-		}
-		g.sched = svc
-		g.health.Set(svc.Name(), health.StatusReady)
-	}
-	if cfg.Services.KMS.Enabled {
-		svc, err := kms.New(store, cfg)
-		if err != nil {
-			return nil, fmt.Errorf("init kms: %w", err)
-		}
-		g.kms = svc
-		g.health.Set(svc.Name(), health.StatusReady)
-	}
-	if cfg.Services.Logging.Enabled {
-		svc, err := logging.New(store, cfg)
-		if err != nil {
-			return nil, fmt.Errorf("init logging: %w", err)
-		}
-		g.logging = svc
-		svc.Register(g.mux)
-		g.health.Set(svc.Name(), health.StatusReady)
-	}
-	if cfg.Services.Monitoring.Enabled {
-		svc, err := monitoring.New(store, cfg)
-		if err != nil {
-			return nil, fmt.Errorf("init monitoring: %w", err)
-		}
-		g.mon = svc
-		g.health.Set(svc.Name(), health.StatusReady)
-	}
-	if cfg.Services.Firestore.Enabled {
-		svc, err := firestore.New(store, cfg)
-		if err != nil {
-			return nil, fmt.Errorf("init firestore: %w", err)
-		}
-		g.fs = svc
-		svc.RegisterGRPC(g.grpc)
-		g.health.Set(svc.Name(), health.StatusReady)
-	}
-	if cfg.Services.BigQuery.Enabled {
-		svc, err := bigquery.New(store, cfg)
-		if err != nil {
-			return nil, fmt.Errorf("init bigquery: %w", err)
-		}
-		g.bq = svc
-		svc.Register(g.mux)
-		g.health.Set(svc.Name(), health.StatusReady)
-	}
-	if cfg.Services.Bigtable.Enabled {
-		svc, err := bigtable.New(store, cfg)
-		if err != nil {
-			return nil, fmt.Errorf("init bigtable: %w", err)
-		}
-		g.bt = svc
-		svc.RegisterGRPC(g.grpc)
-		g.health.Set(svc.Name(), health.StatusReady)
-	}
-	if cfg.Services.Spanner.Enabled {
-		svc, err := spanner.New(store, cfg)
-		if err != nil {
-			return nil, fmt.Errorf("init spanner: %w", err)
-		}
-		g.sp = svc
-		svc.RegisterGRPC(g.grpc)
-		g.health.Set(svc.Name(), health.StatusReady)
-	}
-	if cfg.Services.Memorystore.Enabled {
-		svc, err := memorystore.New(store, cfg)
-		if err != nil {
-			return nil, fmt.Errorf("init memorystore: %w", err)
-		}
-		g.mem = svc
-		g.health.Set(svc.Name(), health.StatusReady)
-	}
-	if cfg.Services.CloudSQL.Enabled {
-		svc, err := cloudsql.New(store, cfg)
-		if err != nil {
-			return nil, fmt.Errorf("init cloudsql: %w", err)
-		}
-		g.csql = svc
-		svc.Register(g.mux)
-		g.health.Set(svc.Name(), health.StatusReady)
-	}
-	if cfg.Services.CloudRun.Enabled {
-		svc, err := cloudrun.NewCloudRun(store, cfg)
-		if err != nil {
-			return nil, fmt.Errorf("init cloudrun: %w", err)
-		}
-		g.run = svc
-		g.health.Set(svc.Name(), health.StatusReady)
-	}
-	if cfg.Services.Functions.Enabled {
-		svc, err := cloudrun.NewFunctions(store, cfg)
-		if err != nil {
-			return nil, fmt.Errorf("init functions: %w", err)
-		}
-		g.funcs = svc
-		g.health.Set(svc.Name(), health.StatusReady)
-	}
-	if cfg.Services.Metadata.Enabled {
-		svc, err := metadata.New(store, cfg)
-		if err != nil {
-			return nil, fmt.Errorf("init metadata: %w", err)
-		}
-		g.meta = svc
-		svc.Register(g.mux)
-		g.health.Set(svc.Name(), health.StatusReady)
-
-		iam, err := iamcredentials.New(store, cfg, svc)
-		if err != nil {
-			return nil, fmt.Errorf("init iamcredentials: %w", err)
-		}
-		g.iamc = iam
-		g.health.Set(iam.Name(), health.StatusReady)
 	}
 
-	if cfg.Dashboard {
-		copts := console.Options{
-			Version: build.Version,
-			Commit:  build.Commit,
-			Project: cfg.Project,
-			Health:  g.health,
-		}
-		// Wire each per-service console adapter only when the underlying
-		// service is constructed. Each adapter is a small interface in
-		// the console package; the service implements just what /console
-		// renders, leaving the full REST/gRPC surface untouched. The
-		// remaining services (storage, pubsub, firestore, secrets,
-		// tasks, scheduler, kms) get wired here as their console
-		// adapters land.
-		if g.logging != nil {
-			copts.Logging = g.logging
-		}
-		if g.storage != nil {
-			copts.Storage = g.storage
-		}
-		if g.pubsub != nil {
-			copts.PubSub = g.pubsub
-		}
-		if g.fs != nil {
-			copts.Firestore = g.fs
-		}
-		if g.sm != nil {
-			copts.Secrets = g.sm
-		}
-		if g.tasks != nil {
-			copts.Tasks = g.tasks
-		}
-		if g.sched != nil {
-			copts.Scheduler = g.sched
-		}
-		if g.kms != nil {
-			copts.KMS = g.kms
-		}
-		if g.mon != nil {
-			copts.Monitoring = g.mon
-		}
-		if g.bq != nil {
-			copts.BigQuery = g.bq
-		}
-		if g.csql != nil {
-			copts.CloudSQL = g.csql
-		}
-		if g.run != nil {
-			copts.CloudRun = g.run
-		}
-		if g.funcs != nil {
-			copts.Functions = g.funcs
-		}
-		if g.mem != nil {
-			copts.Memorystore = g.mem
-		}
-		if g.bt != nil {
-			copts.Bigtable = g.bt
-		}
-		if g.sp != nil {
-			copts.Spanner = g.sp
-		}
-		cs, err := console.New(store, copts)
-		if err != nil {
-			return nil, fmt.Errorf("init console: %w", err)
-		}
-		cs.Register(g.mux)
+	if err := g.initConsole(cfg, build, store); err != nil {
+		return nil, err
 	}
 
 	return g, nil
