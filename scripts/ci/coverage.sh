@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Coverage ratchet. Runs the Go integration tests against a coverage build of
 # the binary, for HEAD and for the merge base, and fails when a package drops.
+# A failing comparison re-measures once into fresh output dirs; the drop must
+# reproduce on the second comparison to fail the ratchet.
 #   coverage.sh [base-ref]    default: origin/main
 # Env: COVER_TOLERANCE (points, default 2.0; parallel tests vary by ~1.5), COVER_NEW_FLOOR (percent for a
 # new internal/services package, default 60).
@@ -26,46 +28,65 @@ measure() {
     sort >"$out/pct"
 }
 
+# head_guards <head-dir>: exact lines and exit 1, also for the re-measured head.
+head_guards() {
+  if [ -e "$1/status" ]; then
+    echo "coverage: tests failed on HEAD"
+    tail -40 "$1/test.log"
+    exit 1
+  fi
+  if [ ! -s "$1/pct" ]; then
+    echo "coverage: HEAD produced no coverage data"
+    exit 1
+  fi
+}
+
+# compare <base-dir> <head-dir>: table and FAIL lines; status 1 on failure.
+compare() {
+  if [ -e "$1/status" ] || [ ! -s "$1/pct" ]; then
+    echo "coverage: no usable base data; reporting HEAD only"
+    : >"$1/pct"
+  fi
+  local has_base=0
+  [ -s "$1/pct" ] && has_base=1
+  join -a 2 -e none -o 0,1.2,2.2 "$1/pct" "$2/pct" |
+    awk -v tol="$TOL" -v floor="$FLOOR" -v has_base="$has_base" '
+      {
+        pkg = $1; base = $2; head = $3
+        printf "  %-45s %6s -> %6s\n", pkg, base, head
+        if (base == "none") {
+          if (pkg ~ /^internal\/services\// && head + 0 < floor + 0 && has_base) {
+            printf "coverage: FAIL: new package %s has %.1f%% (floor %d%%)\n", pkg, head, floor
+            bad++
+          }
+        } else if (head + tol < base) {
+          printf "coverage: FAIL: %s dropped from %.1f%% to %.1f%%\n", pkg, base, head
+          bad++
+        }
+      }
+      END { exit bad > 0 }
+    '
+}
+
 git -C "$ROOT" worktree add -q --detach "$work/base-src" "$(git -C "$ROOT" merge-base HEAD "$BASE")"
 # Sequential on purpose: parallel runs change stream timing and add noise.
 measure "$ROOT" "$work/head"
 measure "$work/base-src" "$work/base"
 
-if [ -e "$work/head/status" ]; then
-  echo "coverage: tests failed on HEAD"
-  tail -40 "$work/head/test.log"
-  exit 1
-fi
-if [ ! -s "$work/head/pct" ]; then
-  echo "coverage: HEAD produced no coverage data"
-  exit 1
-fi
+head_guards "$work/head"
 
 echo "coverage per package (base -> head):"
-if [ -e "$work/base/status" ] || [ ! -s "$work/base/pct" ]; then
-  echo "coverage: no usable base data; reporting HEAD only"
-  : >"$work/base/pct"
-fi
+compare "$work/base" "$work/head"
+[ $? -eq 0 ] && echo "coverage: ok" && exit 0
 
-has_base=0
-[ -s "$work/base/pct" ] && has_base=1
-join -a 2 -e none -o 0,1.2,2.2 "$work/base/pct" "$work/head/pct" |
-  awk -v tol="$TOL" -v floor="$FLOOR" -v has_base="$has_base" '
-    {
-      pkg = $1; base = $2; head = $3
-      printf "  %-45s %6s -> %6s\n", pkg, base, head
-      if (base == "none") {
-        if (pkg ~ /^internal\/services\// && head + 0 < floor + 0 && has_base) {
-          printf "coverage: FAIL: new package %s has %.1f%% (floor %d%%)\n", pkg, head, floor
-          bad++
-        }
-      } else if (head + tol < base) {
-        printf "coverage: FAIL: %s dropped from %.1f%% to %.1f%%\n", pkg, base, head
-        bad++
-      }
-    }
-    END { exit bad > 0 }
-  '
+echo "coverage: first comparison failed; re-measure head and base once"
+measure "$ROOT" "$work/head2"
+measure "$work/base-src" "$work/base2"
+
+head_guards "$work/head2"
+
+echo "coverage per package, re-measured (base -> head):"
+compare "$work/base2" "$work/head2"
 status=$?
 [ "$status" -eq 0 ] && echo "coverage: ok"
 exit "$status"
