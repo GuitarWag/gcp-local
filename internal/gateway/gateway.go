@@ -333,6 +333,9 @@ func New(cfg *config.Config, build BuildInfo) (*Gateway, error) {
 		if g.sp != nil {
 			copts.Spanner = g.sp
 		}
+		if g.iamSA != nil {
+			copts.IAMAdmin = g.iamSA
+		}
 		cs, err := console.New(store, copts)
 		if err != nil {
 			return nil, fmt.Errorf("init console: %w", err)

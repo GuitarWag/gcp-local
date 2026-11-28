@@ -52,6 +52,7 @@ type Options struct {
 	Memorystore ConsoleMemorystore
 	Bigtable    ConsoleStubService
 	Spanner     ConsoleStubService
+	IAMAdmin    ConsoleIAMAdmin
 }
 
 // Small per-page interfaces. Services implement just what the console
@@ -134,6 +135,19 @@ type ConsoleStubService interface {
 	ConsoleStatus() map[string]any
 }
 
+// ConsoleIAMAdmin is the contract for the IAM Admin page. Adapter
+// errors carry a StatusCode() so the console handler can map them into
+// GCP-style error bodies; the service package defines that error type.
+type ConsoleIAMAdmin interface {
+	ConsoleAccounts() ([]map[string]any, error)
+	ConsoleCreateAccount(accountID, displayName, description string) (map[string]any, error)
+	ConsoleDeleteAccount(email string) error
+	ConsoleKeys(account string) ([]map[string]any, error)
+	ConsoleCreateKey(account string) (map[string]any, error)
+	ConsoleDeleteKey(account, keyID string) error
+	ConsoleCredentials(account, keyID string) ([]byte, string, error)
+}
+
 // Service is the console HTTP handler.
 type Service struct {
 	store   state.Store
@@ -185,6 +199,7 @@ func New(store state.Store, opts Options) (*Service, error) {
 		{ID: "memorystore", HealthName: "memorystore", Label: "Memorystore", Href: "/console/memorystore", Icon: "memory", Endpoint: "Redis on its own port", Enabled: opts.Memorystore != nil},
 		{ID: "bigtable", HealthName: "bigtable", Label: "Bigtable", Href: "/console/bigtable", Icon: "view_module", Endpoint: "gRPC (bigtable.v2, stub)", Enabled: opts.Bigtable != nil},
 		{ID: "spanner", HealthName: "spanner", Label: "Spanner", Href: "/console/spanner", Icon: "hub", Endpoint: "gRPC (spanner.v1, stub)", Enabled: opts.Spanner != nil},
+		{ID: iamadminPageID, HealthName: "iamadmin", Label: "IAM Admin", Href: "/console/iamadmin", Icon: "key", Endpoint: "/v1/projects/*/serviceAccounts", Enabled: opts.IAMAdmin != nil},
 	}
 	return s, nil
 }
