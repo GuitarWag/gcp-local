@@ -12,8 +12,6 @@ import (
 
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
 	"google.golang.org/grpc"
 
 	"github.com/GuitarWag/gcp-local/internal/config"
@@ -391,9 +389,11 @@ func (g *Gateway) Run(ctx context.Context) error {
 			MinVersion: tls.VersionTLS12,
 		}
 	} else {
-		// h2c — HTTP/2 cleartext over a plain HTTP listener.
-		h2s := &http2.Server{}
-		srv.Handler = h2c.NewHandler(g.handler(), h2s)
+		// Unencrypted HTTP/2 over a plain HTTP listener.
+		srv.Handler = g.handler()
+		srv.Protocols = new(http.Protocols)
+		srv.Protocols.SetHTTP1(true)
+		srv.Protocols.SetUnencryptedHTTP2(true)
 	}
 
 	errCh := make(chan error, 1)
