@@ -237,6 +237,7 @@ func New(cfg *config.Config, build BuildInfo) (*Gateway, error) {
 			return nil, fmt.Errorf("init cloudrun: %w", err)
 		}
 		g.run = svc
+		g.mux.HandleFunc("/v1/apis/serving.knative.dev/", svc.HandleNamespaced)
 		g.health.Set(svc.Name(), health.StatusReady)
 	}
 	if cfg.Services.Functions.Enabled {
