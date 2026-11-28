@@ -40,6 +40,7 @@ import (
 	"github.com/GuitarWag/gcp-local/internal/services/spanner"
 	"github.com/GuitarWag/gcp-local/internal/services/storage"
 	"github.com/GuitarWag/gcp-local/internal/services/tasks"
+	"github.com/GuitarWag/gcp-local/internal/services/workflows"
 	"github.com/GuitarWag/gcp-local/internal/state"
 )
 
@@ -74,6 +75,7 @@ type Gateway struct {
 	run     *cloudrun.Service
 	funcs   *cloudrun.Service
 	meta    *metadata.Service
+	wf      *workflows.Service
 	iamc    *iamcredentials.Service
 	svcu    *serviceusage.Service
 	iam     *iam.Store
@@ -252,6 +254,14 @@ func New(cfg *config.Config, build BuildInfo) (*Gateway, error) {
 		g.svcu = svc
 		g.health.Set(svc.Name(), health.StatusReady)
 		svc.Register(g.mux)
+	}
+	if cfg.Services.Workflows.Enabled {
+		svc, err := workflows.New(store, cfg)
+		if err != nil {
+			return nil, fmt.Errorf("init workflows: %w", err)
+		}
+		g.wf = svc
+		g.health.Set(svc.Name(), health.StatusReady)
 	}
 	if cfg.Services.Metadata.Enabled {
 		svc, err := metadata.New(store, cfg)

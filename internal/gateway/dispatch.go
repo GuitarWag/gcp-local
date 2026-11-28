@@ -37,6 +37,9 @@ func (g *Gateway) dispatchV1(w http.ResponseWriter, r *http.Request) {
 	if g.sched != nil {
 		handlers = append(handlers, g.sched.HandleV1)
 	}
+	if g.wf != nil {
+		handlers = append(handlers, g.wf.HandleV1)
+	}
 	if g.kms != nil {
 		handlers = append(handlers, g.kms.HandleV1)
 	}

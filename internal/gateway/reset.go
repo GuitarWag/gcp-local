@@ -6,6 +6,7 @@ import (
 
 	"github.com/GuitarWag/gcp-local/internal/iam"
 	"github.com/GuitarWag/gcp-local/internal/services/iamadmin"
+	"github.com/GuitarWag/gcp-local/internal/services/workflows"
 )
 
 func (g *Gateway) handleReset(w http.ResponseWriter, r *http.Request) {
@@ -22,6 +23,8 @@ func (g *Gateway) handleReset(w http.ResponseWriter, r *http.Request) {
 		"tasks/queues",
 		"tasks/tasks",
 		"scheduler/jobs",
+		workflows.NamespaceWorkflows,
+		workflows.NamespaceOperations,
 		"kms/keyrings",
 		"kms/cryptokeys",
 		"bigtable/tables",

@@ -141,6 +141,7 @@ but data-plane operations return errors.
 | CloudSQL | partial | `gcloud sql instances create my-db --database-version=POSTGRES_15 --tier=db-f1-micro --region=us-central1` — instance admin works; connecting via `gcloud sql connect` is not wired up (use the Postgres wire endpoint directly). |
 | Bigtable | stub | Admin RPCs partially answer; data path returns `UNIMPLEMENTED`. |
 | Spanner | stub | `CreateSession` works; data verbs return `UNIMPLEMENTED`. |
+| Workflows | partial | `gcloud workflows deploy my-wf --source=wf.yaml --location=us-central1` <br> `gcloud workflows describe my-wf --location=us-central1` <br> `gcloud workflows list --location=us-central1` — definitions CRUD works; executions land in issue #98. |
 
 > **Verify locally.** `gcloud` versions move; the exact set of commands
 > that round-trip cleanly varies. When in doubt, run the command, watch

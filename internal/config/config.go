@@ -44,6 +44,7 @@ type ServicesConfig struct {
 	Functions     Functions     `yaml:"functions"`
 	Metadata      Metadata      `yaml:"metadata"`
 	ServiceUsage  ServiceUsage  `yaml:"serviceusage"`
+	Workflows     Workflows     `yaml:"workflows"`
 }
 
 type Metadata struct {
@@ -127,6 +128,10 @@ type Functions struct {
 	Enabled bool `yaml:"enabled"`
 }
 
+type Workflows struct {
+	Enabled bool `yaml:"enabled"`
+}
+
 type Storage struct {
 	Enabled bool     `yaml:"enabled"`
 	Buckets []Bucket `yaml:"buckets"`
@@ -178,6 +183,7 @@ func Default() *Config {
 			Functions:     Functions{Enabled: true},
 			Metadata:      Metadata{Enabled: true},
 			ServiceUsage:  ServiceUsage{Enabled: true},
+			Workflows:     Workflows{Enabled: true},
 		},
 	}
 }
