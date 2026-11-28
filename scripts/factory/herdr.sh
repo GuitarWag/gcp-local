@@ -115,9 +115,13 @@ reap_herdr_jobs() {
       fi
       idle=$(((now - $(mtime "$hf")) / 60))
       age=$(((now - $(mtime "$f")) / 60))
-      if [ "$idle" -ge "$STALL_MIN" ] || [ "$age" -ge "$JOB_MAX_MIN" ]; then
+      if [ "$idle" -ge "$STALL_MIN" ]; then
         log "watchdog: stop $id (screen unchanged ${idle}m, running ${age}m)"
         [ -n "$DRY" ] || end_herdr_job "$id" "$pane" "$issue" fail
+      elif [ "$age" -ge "$(max_min "$id")" ]; then
+        # ponytail: no retry cap; add one if jobs loop.
+        log "watchdog: stop $id at the time limit (running ${age}m); no failed attempt"
+        [ -n "$DRY" ] || { "$CLAIM" release "$issue" "$id"; end_herdr_job "$id" "$pane" "$issue"; }
       fi
     fi
   done
@@ -224,6 +228,9 @@ spawn_team() {
   if [ ! -d "$wt" ]; then
     if git -C "$ROOT" ls-remote --exit-code --heads origin "$branch" >/dev/null; then
       git -C "$ROOT" worktree add -q -B "$branch" "$wt" "origin/$branch"
+    elif git -C "$ROOT" show-ref -q --verify "refs/heads/$branch"; then
+      # A closed team can leave commits that it did not push.
+      git -C "$ROOT" worktree add -q "$wt" "$branch"
     else
       git -C "$ROOT" worktree add -q -b "$branch" "$wt" origin/main
     fi || { log "worktree for $branch failed"; "$CLAIM" drop "$issue" "$id"; return; }

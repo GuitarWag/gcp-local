@@ -27,6 +27,10 @@ WORKER=${FACTORY_WORKER:-pi}
 JOB_LEASE=${FACTORY_JOB_LEASE:-60}
 STALL_MIN=${FACTORY_STALL_MIN:-20}
 JOB_MAX_MIN=${FACTORY_JOB_MAX_MIN:-90}
+# Review and accept run the full test suites, so they need more time.
+JOB_MAX_MIN_LONG=${FACTORY_JOB_MAX_MIN_LONG:-150}
+# No new spec or plan jobs while this many issues wait in build or fix.
+BUILD_WIP=${FACTORY_BUILD_WIP:-8}
 TEAM_LEASE=${FACTORY_TEAM_LEASE:-240}
 JANITOR_EVERY=${FACTORY_JANITOR_EVERY:-3600}
 SCOUT_EVERY=${FACTORY_SCOUT_EVERY:-86400}
@@ -80,6 +84,9 @@ running_jobs() {
 
 mtime() { stat -f %m "$1" 2>/dev/null || stat -c %Y "$1"; }
 
+# Job ids start with the role.
+max_min() { case $1 in review-* | accept-*) echo "$JOB_MAX_MIN_LONG" ;; *) echo "$JOB_MAX_MIN" ;; esac; }
+
 # Stops agents that hang: a model request with no answer never times out.
 # The job wrapper then releases the claim and removes the worktree.
 watchdog() {
@@ -93,7 +100,7 @@ watchdog() {
     [ -e "$logf" ] || continue
     idle=$(((now - $(mtime "$logf")) / 60))
     age=$(((now - $(mtime "$f")) / 60))
-    if [ "$idle" -ge "$STALL_MIN" ] || [ "$age" -ge "$JOB_MAX_MIN" ]; then
+    if [ "$idle" -ge "$STALL_MIN" ] || [ "$age" -ge "$(max_min "$id")" ]; then
       log "watchdog: stop $id (no log output for ${idle}m, running ${age}m)"
       [ -n "$DRY" ] || pkill -TERM -P "$wrapper"
     fi
@@ -220,9 +227,11 @@ tick() {
   reap_herdr_jobs
   close_finished_teams
 
-  local role issue
+  local role issue wip
+  wip=$(($(count_label stage:build) + $(count_label stage:fix)))
   # Latest stage first: work near merge finishes before new work starts.
   for role in accept review plan spec; do
+    case $role in plan | spec) [ "$wip" -lt "$BUILD_WIP" ] || continue ;; esac
     for issue in $(issues_in "$role"); do
       [ "$(running_jobs)" -lt "$MAX_JOBS" ] || break 2
       spawn_job "$role" "$issue"
