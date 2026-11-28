@@ -46,7 +46,7 @@ dashboard.
   variables.
 - Persists state to BoltDB or keeps it in memory, your choice.
 - Boots in ~50 ms. Restarts cleanly. Resets state on demand.
-- Has 180 integration tests using the real SDK clients, including
+- Has 193 integration tests using the real SDK clients, including
   race-detector-clean concurrency tests.
 
 ---
