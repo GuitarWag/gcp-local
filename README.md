@@ -499,22 +499,22 @@ OTLP-gRPC collector. Any other value is rejected at start-up.
 ## Tests
 
 ```bash
-# Go (133 tests, race-detector clean)
+# Go (141 tests, race-detector clean)
 cd tests/go && go test -race ./...
 
-# Python (25 tests)
+# Python (28 tests)
 cd tests/python
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 .venv/bin/python -m pytest
 
-# TypeScript (22 tests)
+# TypeScript (24 tests)
 cd tests/typescript
 pnpm install
 pnpm test
 ```
 
-180 integration tests total. Tests use the real GCP client libraries — they
+193 integration tests total. Tests use the real GCP client libraries — they
 exercise the same wire surface your production code will hit.
 
 ## Divergences from the design spec

@@ -36,6 +36,7 @@ internal/
     metadata/         GCE-shaped metadata server
     iamcredentials/   generateAccessToken / generateIdToken
     iamadmin/         service accounts CRUD + keys
+    serviceusage/     service enable state + batchEnable operations
 tests/
   go/                 Integration tests, separate Go module
   python/             pytest + venv
