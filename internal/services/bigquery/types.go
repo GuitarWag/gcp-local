@@ -21,10 +21,16 @@ const (
 	bqTypeBoolean = "BOOLEAN"
 )
 
+type datasetReference struct {
+	ProjectID string `json:"projectId"`
+	DatasetID string `json:"datasetId"`
+}
+
 type dataset struct {
-	ID         string    `json:"datasetId"`
-	Kind       string    `json:"kind"`
-	CreateTime time.Time `json:"creationTime"`
+	ID               string           `json:"datasetId"`
+	Kind             string           `json:"kind"`
+	DatasetReference datasetReference `json:"datasetReference"`
+	CreateTime       time.Time        `json:"creationTime"`
 }
 
 type table struct {

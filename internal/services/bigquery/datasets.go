@@ -11,7 +11,7 @@ func (s *Service) handleDatasets(w http.ResponseWriter, r *http.Request, parts [
 	switch len(parts) {
 	case 2:
 		if r.Method == http.MethodPost {
-			s.createDataset(w, r)
+			s.createDataset(w, r, parts[0])
 			return
 		}
 		if r.Method == http.MethodGet {
@@ -40,7 +40,7 @@ func (s *Service) handleDatasets(w http.ResponseWriter, r *http.Request, parts [
 	http.NotFound(w, r)
 }
 
-func (s *Service) createDataset(w http.ResponseWriter, r *http.Request) {
+func (s *Service) createDataset(w http.ResponseWriter, r *http.Request, project string) {
 	var body struct {
 		DatasetReference struct {
 			DatasetID string `json:"datasetId"`
@@ -65,7 +65,12 @@ func (s *Service) createDataset(w http.ResponseWriter, r *http.Request) {
 		s.writeErr(w, http.StatusConflict, "dataset exists")
 		return
 	}
-	d := &dataset{ID: id, Kind: "bigquery#dataset", CreateTime: time.Now().UTC()}
+	d := &dataset{
+		ID:               id,
+		Kind:             "bigquery#dataset",
+		DatasetReference: datasetReference{ProjectID: project, DatasetID: id},
+		CreateTime:       time.Now().UTC(),
+	}
 	s.datasets[id] = d
 	s.tables[id] = map[string]*table{}
 	s.writeJSON(w, http.StatusOK, d)
