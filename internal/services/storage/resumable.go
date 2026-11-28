@@ -76,7 +76,8 @@ func (s *Service) uploadResumableStart(w http.ResponseWriter, r *http.Request, b
 //     bytes; return 308 (Resume Incomplete) until the final byte arrives,
 //     then 200 with object metadata.
 //   - Status query with `Content-Range: bytes */<total>` and an empty body:
-//     report current upload progress via 308 + Range header (no body).
+//     report current upload progress via 308 + Range header (no body), or
+//     finalise when the buffer already holds all total bytes.
 func (s *Service) uploadResumableData(w http.ResponseWriter, r *http.Request, bucket, uploadID string) {
 	resumableMu.Lock()
 	sess, ok := resumableSessions[uploadID]
@@ -108,9 +109,16 @@ func (s *Service) uploadResumableData(w http.ResponseWriter, r *http.Request, bu
 	resumableMu.Lock()
 	defer resumableMu.Unlock()
 
-	// Status query: "bytes */<total>" with empty body. Report progress.
+	// Status query: "bytes */<total>" with empty body. When the buffer already
+	// holds all total bytes, this PUT finalises the upload: the Python SDK
+	// ends an unknown-total upload with "bytes */N" after the last chunk.
+	// "bytes */*" (total unknown) stays a status query.
 	if isStatus {
 		if total >= 0 {
+			if int64(len(sess.Buffer)) == total {
+				s.finaliseResumableLocked(w, sess, uploadID)
+				return
+			}
 			sess.TotalSize = total
 		}
 		s.writeResumableStatus(w, uploadID, sess)
