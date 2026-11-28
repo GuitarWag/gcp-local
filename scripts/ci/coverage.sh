@@ -77,7 +77,7 @@ head_guards "$work/head"
 
 echo "coverage per package (base -> head):"
 compare "$work/base" "$work/head"
-[ $? -eq 0 ] && exit 0
+[ $? -eq 0 ] && echo "coverage: ok" && exit 0
 
 echo "coverage: first comparison failed; re-measure head and base once"
 measure "$ROOT" "$work/head2"
