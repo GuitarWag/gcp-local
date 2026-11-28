@@ -36,6 +36,7 @@ internal/
     metadata/         GCE-shaped metadata server
     iamcredentials/   generateAccessToken / generateIdToken
     iamadmin/         service accounts CRUD + keys
+    serviceusage/     service enable state + batchEnable operations
 tests/
   go/                 Integration tests, separate Go module
   python/             pytest + venv
@@ -75,6 +76,9 @@ and lists all failures at the end:
 scripts/ci/gate.sh            # vet, gofmt, golangci-lint (twice), ast-grep, policy, 3 test suites
 scripts/ci/gate.sh --cover    # also the coverage ratchet
 ```
+
+At most 2 gate runs happen at the same time on one machine
+(`GATE_SLOTS`). A third run waits for a free slot.
 
 | Check | Config | What it blocks |
 |---|---|---|

@@ -94,6 +94,13 @@ case "$cmd" in
     claims "$issue" | awk -F'\t' -v a="$agent" '$2 == a' |
       while IFS=$'\t' read -r id a _; do fail "$issue" "$id" "$a"; done
     ;;
+  release)
+    # Orchestrator: end a claim without a failed attempt.
+    issue=$2 agent=$3
+    claims "$issue" | awk -F'\t' -v a="$agent" '$2 == a { print $1 }' |
+      while read -r id; do delete_comment "$id"; done
+    unclaim_if_empty "$issue"
+    ;;
   holds)
     # Exit 0 when the agent still holds a claim on the issue.
     claims "$2" | awk -F'\t' -v a="$3" '$2 == a { found = 1 } END { exit !found }'
@@ -107,7 +114,7 @@ case "$cmd" in
     done
     ;;
   *)
-    echo "usage: $0 claim|renew <issue> <agent> <minutes> | advance <issue> <from> <to> | flag <issue> <reason> | drop|holds <issue> <agent> | reap" >&2
+    echo "usage: $0 claim|renew <issue> <agent> <minutes> | advance <issue> <from> <to> | flag <issue> <reason> | drop|release|holds <issue> <agent> | reap" >&2
     exit 2
     ;;
 esac

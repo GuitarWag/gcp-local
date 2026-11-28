@@ -115,9 +115,13 @@ reap_herdr_jobs() {
       fi
       idle=$(((now - $(mtime "$hf")) / 60))
       age=$(((now - $(mtime "$f")) / 60))
-      if [ "$idle" -ge "$STALL_MIN" ] || [ "$age" -ge "$JOB_MAX_MIN" ]; then
+      if [ "$idle" -ge "$STALL_MIN" ]; then
         log "watchdog: stop $id (screen unchanged ${idle}m, running ${age}m)"
         [ -n "$DRY" ] || end_herdr_job "$id" "$pane" "$issue" fail
+      elif [ "$age" -ge "$(max_min "$id")" ]; then
+        # ponytail: no retry cap; add one if jobs loop.
+        log "watchdog: stop $id at the time limit (running ${age}m); no failed attempt"
+        [ -n "$DRY" ] || { "$CLAIM" release "$issue" "$id"; end_herdr_job "$id" "$pane" "$issue"; }
       fi
     fi
   done
@@ -224,6 +228,9 @@ spawn_team() {
   if [ ! -d "$wt" ]; then
     if git -C "$ROOT" ls-remote --exit-code --heads origin "$branch" >/dev/null; then
       git -C "$ROOT" worktree add -q -B "$branch" "$wt" "origin/$branch"
+    elif git -C "$ROOT" show-ref -q --verify "refs/heads/$branch"; then
+      # A closed team can leave commits that it did not push.
+      git -C "$ROOT" worktree add -q "$wt" "$branch"
     else
       git -C "$ROOT" worktree add -q -b "$branch" "$wt" origin/main
     fi || { log "worktree for $branch failed"; "$CLAIM" drop "$issue" "$id"; return; }
@@ -258,6 +265,24 @@ close_finished_teams() {
       [.labels[].name] as $l
       | .state == "OPEN" and ($l | index("factory:claimed")) != null
         and (($l | index("stage:build")) != null or ($l | index("stage:fix")) != null)')
-    [ "$active" = true ] || close_team "$issue"
+    if [ "$active" = true ]; then nudge_idle_team "$issue"; else close_team "$issue"; fi
   done
+}
+
+# Workers can miss a task or a report, and then the whole team waits.
+nudge_idle_team() {
+  local issue=$1 f="$HOME_F/run/team-f$1.idle" now since busy
+  now=$(date +%s)
+  busy=$(hjson agent list | jq -r --arg p "f$issue-" \
+    '[.result.agents[] | select((.name // "") | startswith($p)) | select(.agent_status == "working")] | length')
+  if [ "${busy:-1}" != 0 ]; then rm -f "$f"; return; fi
+  [ -f "$f" ] || { echo "$now" >"$f"; return; }
+  since=$(cat "$f")
+  [ $((now - since)) -ge $((TEAM_IDLE * 60)) ] || return 0
+  log "team f$issue idle $(((now - since) / 60))m; nudge boss"
+  echo "$now" >"$f"
+  [ -n "$DRY" ] || herdr-shepherd "f$issue" --send boss --message "Every agent in team f$issue is idle, but #$issue is still in build or fix. \
+Check each worker's report and the git log. Send again any task or report that a worker missed. \
+If all work is done: run scripts/ci/gate.sh, git push (never git-push-queue), open or update the PR, then advance the stage with scripts/factory/claim.sh." \
+    >>"$HOME_F/logs/f$issue.log" 2>&1
 }

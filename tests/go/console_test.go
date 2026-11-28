@@ -2,7 +2,9 @@ package gcplocaltest
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -33,6 +35,7 @@ func TestConsoleAllPagesRender(t *testing.T) {
 		"/console/functions",
 		"/console/bigtable",
 		"/console/spanner",
+		"/console/iamadmin",
 	} {
 		path := path
 		t.Run(path, func(t *testing.T) {
@@ -290,5 +293,208 @@ func TestConsoleBundleSize(t *testing.T) {
 	const maxBytes int64 = 60 * 1024 * 1024
 	if info.Size() > maxBytes {
 		t.Errorf("binary size = %d bytes, want < %d", info.Size(), maxBytes)
+	}
+}
+
+// TestConsoleIAMAdminAPI seeds an account and key through the REST
+// surface, then verifies the IAM Admin page and API endpoints — data,
+// write paths, and the 400/404/409/405 error statuses.
+func TestConsoleIAMAdminAPI(t *testing.T) {
+	em := testutil.Start(t)
+	rest := em.URL("/v1/projects/local-project/serviceAccounts")
+	api := em.URL("/console/api/iamadmin")
+
+	// Seed via REST: create account, then mint one key.
+	resp, body := doJSON(t, http.MethodPost, rest, map[string]any{
+		"accountId":      "console-sa",
+		"serviceAccount": map[string]any{"displayName": "Console SA"},
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("seed create: %d %s", resp.StatusCode, body)
+	}
+	email := "console-sa@local-project.iam.gserviceaccount.com"
+	resp, body = doJSON(t, http.MethodPost, rest+"/"+email+"/keys", map[string]any{})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("seed key: %d %s", resp.StatusCode, body)
+	}
+	var seedKey struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(body, &seedKey); err != nil {
+		t.Fatalf("decode seed key: %v body=%s", err, body)
+	}
+	seedKeyID := seedKey.Name[strings.LastIndexByte(seedKey.Name, '/')+1:]
+	if seedKeyID == "" {
+		t.Fatalf("seed key name %q has no id", seedKey.Name)
+	}
+
+	// The page renders the seeded account.
+	page, err := http.Get(em.URL("/console/iamadmin"))
+	if err != nil {
+		t.Fatalf("page: %v", err)
+	}
+	pageBody, _ := io.ReadAll(page.Body)
+	page.Body.Close()
+	if page.StatusCode != http.StatusOK {
+		t.Fatalf("page status = %d", page.StatusCode)
+	}
+	if ct := page.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+		t.Errorf("page content-type = %q", ct)
+	}
+	// Client-side rendered: the inline JS fills the lists after load, so
+	// the server HTML carries the chrome; data parity is checked on the API.
+	html := string(pageBody)
+	if !strings.Contains(html, "Service Accounts") || !strings.Contains(html, "/console/api/iamadmin/accounts") {
+		t.Errorf("page body missing IAM Admin chrome:\n%s", html)
+	}
+
+	// accounts endpoint carries email, display name and unique ID.
+	resp, body = doJSON(t, http.MethodGet, api+"/accounts", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("accounts: %d %s", resp.StatusCode, body)
+	}
+	var accounts struct {
+		Accounts []struct {
+			Email       string `json:"email"`
+			DisplayName string `json:"displayName"`
+			UniqueID    string `json:"uniqueId"`
+		} `json:"accounts"`
+	}
+	if err := json.Unmarshal(body, &accounts); err != nil {
+		t.Fatalf("decode accounts: %v body=%s", err, body)
+	}
+	var seededUniqueID string
+	for _, a := range accounts.Accounts {
+		if a.Email != email {
+			continue
+		}
+		if a.DisplayName != "Console SA" {
+			t.Errorf("displayName = %q want Console SA", a.DisplayName)
+		}
+		if a.UniqueID == "" {
+			t.Errorf("uniqueId empty for %s", email)
+		}
+		seededUniqueID = a.UniqueID
+	}
+	if seededUniqueID == "" {
+		t.Fatalf("accounts endpoint missing %s: %s", email, body)
+	}
+	// keys endpoint shows the seeded key with the full projection.
+	resp, body = doJSON(t, http.MethodGet, api+"/keys?account="+url.QueryEscape(email), nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("keys: %d %s", resp.StatusCode, body)
+	}
+	var keys struct {
+		Keys []map[string]any `json:"keys"`
+	}
+	if err := json.Unmarshal(body, &keys); err != nil {
+		t.Fatalf("decode keys: %v body=%s", err, body)
+	}
+	var seededRow map[string]any
+	for _, k := range keys.Keys {
+		if k["keyId"] == seedKeyID {
+			seededRow = k
+		}
+	}
+	if seededRow == nil {
+		t.Fatalf("seeded key %s not in keys response: %s", seedKeyID, body)
+	}
+	for _, field := range []string{"keyId", "keyAlgorithm", "keyType", "validAfterTime", "validBeforeTime"} {
+		if v, _ := seededRow[field].(string); v == "" {
+			t.Errorf("key row field %q empty or missing", field)
+		}
+	}
+	// Credentials download: decoded JSON + attachment header.
+	credResp, err := http.Get(api + "/keys/" + seedKeyID + "/credentials?account=" + url.QueryEscape(email))
+	if err != nil {
+		t.Fatalf("credentials: %v", err)
+	}
+	credBody, _ := io.ReadAll(credResp.Body)
+	credResp.Body.Close()
+	if credResp.StatusCode != http.StatusOK {
+		t.Fatalf("credentials status = %d body=%s", credResp.StatusCode, credBody)
+	}
+	var cred struct {
+		Type         string `json:"type"`
+		ClientEmail  string `json:"client_email"`
+		PrivateKeyID string `json:"private_key_id"`
+	}
+	if err := json.Unmarshal(credBody, &cred); err != nil {
+		t.Fatalf("decode credentials: %v body=%s", err, credBody)
+	}
+	if cred.Type != "service_account" || cred.ClientEmail != email || cred.PrivateKeyID != seedKeyID {
+		t.Errorf("credentials = %+v", cred)
+	}
+	disp := credResp.Header.Get("Content-Disposition")
+	if !strings.Contains(disp, ".json") || !strings.Contains(disp, seedKeyID) {
+		t.Errorf("content-disposition = %q", disp)
+	}
+	// Write paths: create key, then delete key, account; cascade visible.
+	resp, body = doJSON(t, http.MethodPost, api+"/keys?account="+url.QueryEscape(email), map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("api create key: %d %s", resp.StatusCode, body)
+	}
+	var createdKey struct {
+		KeyID string `json:"keyId"`
+	}
+	if err := json.Unmarshal(body, &createdKey); err != nil || createdKey.KeyID == "" {
+		t.Fatalf("api create key body=%s err=%v", body, err)
+	}
+	var afterCreate struct {
+		Keys []struct {
+			KeyID string `json:"keyId"`
+		} `json:"keys"`
+	}
+	resp, body = doJSON(t, http.MethodGet, api+"/keys?account="+url.QueryEscape(email), nil)
+	_ = json.Unmarshal(body, &afterCreate)
+	found := false
+	for _, k := range afterCreate.Keys {
+		if k.KeyID == createdKey.KeyID {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("created key %s not listed after create: %s", createdKey.KeyID, body)
+	}
+	resp, body = doJSON(t, http.MethodDelete, api+"/keys?account="+url.QueryEscape(email)+"&key="+url.QueryEscape(createdKey.KeyID), nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("api delete key: %d %s", resp.StatusCode, body)
+	}
+	// Wrong method on the accounts endpoint → 405; empty accountId → 400.
+	resp, _ = doJSON(t, http.MethodPut, api+"/accounts", map[string]any{})
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("accounts PUT status = %d want 405", resp.StatusCode)
+	}
+	resp, body = doJSON(t, http.MethodPost, api+"/accounts", map[string]any{"accountId": ""})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("create empty accountId status = %d want 400 body=%s", resp.StatusCode, body)
+	}
+	// Duplicate account → 409 and the message names the account.
+	resp, body = doJSON(t, http.MethodPost, api+"/accounts", map[string]any{
+		"accountId": "console-sa",
+	})
+	if resp.StatusCode != http.StatusConflict {
+		t.Errorf("duplicate create status = %d want 409 body=%s", resp.StatusCode, body)
+	}
+	if !strings.Contains(string(body), email) {
+		t.Errorf("409 message %q does not name the account", body)
+	}
+
+	// Delete the account; the cascade and the 404 on repeat are visible.
+	resp, body = doJSON(t, http.MethodDelete, api+"/accounts?email="+url.QueryEscape(email), nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("api delete account: %d %s", resp.StatusCode, body)
+	}
+	resp, body = doJSON(t, http.MethodGet, api+"/accounts", nil)
+	if strings.Contains(string(body), email) {
+		t.Errorf("account %s still listed after delete: %s", email, body)
+	}
+	resp, _ = doJSON(t, http.MethodGet, api+"/keys?account="+url.QueryEscape(email), nil)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("keys after cascade status = %d want 404", resp.StatusCode)
+	}
+	resp, body = doJSON(t, http.MethodDelete, api+"/accounts?email="+url.QueryEscape(email), nil)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("second delete status = %d want 404 body=%s", resp.StatusCode, body)
 	}
 }

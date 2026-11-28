@@ -4,6 +4,9 @@
 
 | Record | Status | Date | Tags |
 |---|---|---|---|
+| [Longer time limit for review and accept, build queue limit](20261128-094405-longer-time-limit-for-review-and.md) | accepted | 2026-11-28 | process, factory |
+| [Remove the FizzBee verify stage](20261127-210523-remove-the-fizzbee-verify-stage.md) | accepted | 2026-11-27 | process, factory |
+| [Nudge the boss of an idle factory team](20261127-201615-nudge-the-boss-of-an-idle.md) | accepted | 2026-11-27 | process, factory, herdr |
 | [Console UI initiative role](20261127-121826-console-ui-initiative-role.md) | accepted | 2026-11-27 | process, factory, console |
 | [Visible factory agents: herdr runner with resident janitor and scout](20261126-233622-visible-factory-agents-herdr-runner-with.md) | accepted | 2026-11-26 | process, factory |
 | [Holdout acceptance scenarios between review and merge](20261126-221104-holdout-acceptance-scenarios-between-review-and.md) | accepted | 2026-11-26 | process, factory |
@@ -16,17 +19,23 @@
 
 ```mermaid
 graph TD
-  n0["Console UI initiative role"]
-  n1["Visible factory agents: herdr runner with resident janitor …"]
-  n2["Holdout acceptance scenarios between review and merge"]
-  n3["CI guardrails: mechanical checks over written rules"]
-  n4["Autonomous agent factory: label state machine, no human gate"]
-  n5["Spanner emulator: SQLite per database, buffered read-write …"]
-  n6["Adopt adrlog CLI for architecture decision records"]
-  n0 --> n4
-  n1 --> n4
+  n0["Longer time limit for review and accept, build queue limit"]
+  n1["Remove the FizzBee verify stage"]
+  n2["Nudge the boss of an idle factory team"]
+  n3["Console UI initiative role"]
+  n4["Visible factory agents: herdr runner with resident janitor …"]
+  n5["Holdout acceptance scenarios between review and merge"]
+  n6["CI guardrails: mechanical checks over written rules"]
+  n7["Autonomous agent factory: label state machine, no human gate"]
+  n8["Spanner emulator: SQLite per database, buffered read-write …"]
+  n9["Adopt adrlog CLI for architecture decision records"]
+  n0 --> n7
+  n1 --> n7
   n2 --> n4
-  n3 --> n4
-  n4 --> n6
-  n5 --> n6
+  n3 --> n7
+  n4 --> n7
+  n5 --> n7
+  n6 --> n7
+  n7 --> n9
+  n8 --> n9
 ```

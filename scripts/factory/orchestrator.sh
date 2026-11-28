@@ -14,7 +14,8 @@ OWNER=${REPO%%/*}
 HOME_F=${FACTORY_HOME:-$HOME/.factory}
 TICK=${FACTORY_TICK:-300}
 MAX_JOBS=${FACTORY_MAX_JOBS:-3}
-MAX_TEAMS=${FACTORY_MAX_TEAMS:-2}
+MAX_TEAMS=${FACTORY_MAX_TEAMS:-6}
+TEAM_IDLE=${FACTORY_TEAM_IDLE:-10}
 # Entries are "agent" or "agent:provider/model"; jobs take them in turn.
 AGENTS=${FACTORY_AGENTS:-"pi opencode"}
 # A reviewer from another model family catches what the builders miss.
@@ -26,6 +27,10 @@ WORKER=${FACTORY_WORKER:-pi}
 JOB_LEASE=${FACTORY_JOB_LEASE:-60}
 STALL_MIN=${FACTORY_STALL_MIN:-20}
 JOB_MAX_MIN=${FACTORY_JOB_MAX_MIN:-90}
+# Review and accept run the full test suites, so they need more time.
+JOB_MAX_MIN_LONG=${FACTORY_JOB_MAX_MIN_LONG:-150}
+# No new spec or plan jobs while this many issues wait in build or fix.
+BUILD_WIP=${FACTORY_BUILD_WIP:-8}
 TEAM_LEASE=${FACTORY_TEAM_LEASE:-240}
 JANITOR_EVERY=${FACTORY_JANITOR_EVERY:-3600}
 SCOUT_EVERY=${FACTORY_SCOUT_EVERY:-86400}
@@ -79,6 +84,9 @@ running_jobs() {
 
 mtime() { stat -f %m "$1" 2>/dev/null || stat -c %Y "$1"; }
 
+# Job ids start with the role.
+max_min() { case $1 in review-* | accept-*) echo "$JOB_MAX_MIN_LONG" ;; *) echo "$JOB_MAX_MIN" ;; esac; }
+
 # Stops agents that hang: a model request with no answer never times out.
 # The job wrapper then releases the claim and removes the worktree.
 watchdog() {
@@ -92,7 +100,7 @@ watchdog() {
     [ -e "$logf" ] || continue
     idle=$(((now - $(mtime "$logf")) / 60))
     age=$(((now - $(mtime "$f")) / 60))
-    if [ "$idle" -ge "$STALL_MIN" ] || [ "$age" -ge "$JOB_MAX_MIN" ]; then
+    if [ "$idle" -ge "$STALL_MIN" ] || [ "$age" -ge "$(max_min "$id")" ]; then
       log "watchdog: stop $id (no log output for ${idle}m, running ${age}m)"
       [ -n "$DRY" ] || pkill -TERM -P "$wrapper"
     fi
@@ -204,16 +212,26 @@ interval_role() {
   fi
 }
 
+# A stopped job leaves its test emulators behind, owned by launchd.
+reap_orphan_emulators() {
+  local pids
+  pids=$(ps -eo pid=,ppid=,command= | awk '$2 == 1 && $3 ~ /\/gcp-local-(bin|echofn)-[0-9]+\//{print $1}')
+  [ -z "$pids" ] || [ -n "$DRY" ] || { log "stop $(echo "$pids" | wc -l | tr -d ' ') orphan test emulators"; echo "$pids" | xargs kill 2>/dev/null; }
+}
+
 tick() {
   [ -n "$DRY" ] || "$CLAIM" reap
+  reap_orphan_emulators
   running_jobs >/dev/null
   watchdog
   reap_herdr_jobs
   close_finished_teams
 
-  local role issue
+  local role issue wip
+  wip=$(($(count_label stage:build) + $(count_label stage:fix)))
   # Latest stage first: work near merge finishes before new work starts.
-  for role in accept review plan verify spec; do
+  for role in accept review plan spec; do
+    case $role in plan | spec) [ "$wip" -lt "$BUILD_WIP" ] || continue ;; esac
     for issue in $(issues_in "$role"); do
       [ "$(running_jobs)" -lt "$MAX_JOBS" ] || break 2
       spawn_job "$role" "$issue"
@@ -230,7 +248,7 @@ tick() {
   "$ROOT/scripts/factory/release.sh" merge
   if due release "$RELEASE_EVERY"; then "$ROOT/scripts/factory/release.sh" cut; fi
   interval_role janitor "$JANITOR_EVERY"
-  local backlog=$(($(count_label stage:spec) + $(count_label stage:verify) + $(count_label stage:plan)))
+  local backlog=$(($(count_label stage:spec) + $(count_label stage:plan)))
   if [ "$backlog" -lt "$SCOUT_BACKLOG" ]; then
     interval_role scout "$SCOUT_EVERY"
   elif is_resident scout; then
