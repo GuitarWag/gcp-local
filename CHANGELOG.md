@@ -8,6 +8,12 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.13.5] - 2026-11-28
+
+### Changed
+
+- Widened the gosec exclusion paths that pinned `pubsub.go` and `bigquery.go` to their whole packages, so the #62 file splits keep the same exclusions.
+
 ## [0.13.4] - 2026-11-27
 
 ### Changed
@@ -733,7 +739,8 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.13.4...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.13.5...HEAD
+[0.13.5]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.5
 [0.13.4]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.4
 [0.13.3]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.3
 [0.13.2]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.2
