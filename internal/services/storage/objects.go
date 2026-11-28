@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/GuitarWag/gcp-local/internal/state"
 )
@@ -64,10 +65,48 @@ func (s *Service) handleObject(w http.ResponseWriter, r *http.Request, bucket, o
 	}
 }
 
+// Local shapes for the object-not-found body. errorBody in types.go has no
+// errors array and bucket-not-found must keep its plain shape, so these live
+// here and stay private to the object paths.
+type objectNotFoundResponse struct {
+	Error objectNotFoundError `json:"error"`
+}
+
+type objectNotFoundError struct {
+	Code    int           `json:"code"`
+	Message string        `json:"message"`
+	Errors  []errorDetail `json:"errors"`
+}
+
+type errorDetail struct {
+	Domain  string `json:"domain"`
+	Reason  string `json:"reason"`
+	Message string `json:"message"`
+}
+
+// writeObjectNotFound matches the real GCS JSON API response for a missing
+// object: a X-Goog-Gcs-Base-Ts header (unix epoch in ms, hex) and an error
+// body with an errors array carrying reason "notFound".
+func writeObjectNotFound(w http.ResponseWriter, bucket, object string) {
+	msg := fmt.Sprintf("No such object: %s/%s", bucket, object)
+	w.Header().Set("X-Goog-Gcs-Base-Ts", strconv.FormatInt(time.Now().UnixMilli(), 16))
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.WriteHeader(http.StatusNotFound)
+	_ = json.NewEncoder(w).Encode(objectNotFoundResponse{
+		Error: objectNotFoundError{
+			Code:    http.StatusNotFound,
+			Message: msg,
+			Errors: []errorDetail{
+				{Domain: "global", Reason: "notFound", Message: msg},
+			},
+		},
+	})
+}
+
 func (s *Service) getObjectMeta(w http.ResponseWriter, _ *http.Request, bucket, object string) {
 	data, err := s.store.Get(objectNamespace(bucket), object)
 	if errors.Is(err, state.ErrNotFound) {
-		s.writeErr(w, http.StatusNotFound, "object not found")
+		writeObjectNotFound(w, bucket, object)
 		return
 	}
 	if err != nil {
@@ -82,7 +121,7 @@ func (s *Service) getObjectMeta(w http.ResponseWriter, _ *http.Request, bucket, 
 func (s *Service) downloadObject(w http.ResponseWriter, _ *http.Request, bucket, object string) {
 	metaRaw, err := s.store.Get(objectNamespace(bucket), object)
 	if errors.Is(err, state.ErrNotFound) {
-		s.writeErr(w, http.StatusNotFound, "object not found")
+		writeObjectNotFound(w, bucket, object)
 		return
 	}
 	if err != nil {
@@ -112,7 +151,7 @@ func (s *Service) downloadObject(w http.ResponseWriter, _ *http.Request, bucket,
 func (s *Service) deleteObject(w http.ResponseWriter, _ *http.Request, bucket, object string) {
 	if err := s.store.Delete(objectNamespace(bucket), object); err != nil {
 		if errors.Is(err, state.ErrNotFound) {
-			s.writeErr(w, http.StatusNotFound, "object not found")
+			writeObjectNotFound(w, bucket, object)
 			return
 		}
 		s.writeErr(w, http.StatusInternalServerError, err.Error())
