@@ -8,6 +8,18 @@ Until 1.0.0, breaking changes may land in minor releases.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-28
+
+### Added
+
+- **Service Usage API emulator.** The emulator now serves the Service Usage API
+  at `/v1/projects/{project}/services`: list with `filter=state:ENABLED|DISABLED`
+  plus `pageSize` and `pageToken`, get, and `:enable` / `:disable` verbs that
+  return completed long-running operations. `services:batchEnable` enables up
+  to 20 services in one call. A static catalog covers the 19 emulated services,
+  and per-project enable/disable state persists through the shared state store.
+  Closes #40.
+
 ## [0.13.5] - 2026-11-28
 
 ### Changed
@@ -739,7 +751,8 @@ First public release.
   (functionally equivalent for emulator use).
 - Default state backend is `memory`, not `boltdb`.
 
-[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.13.5...HEAD
+[Unreleased]: https://github.com/GuitarWag/gcp-local/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.14.0
 [0.13.5]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.5
 [0.13.4]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.4
 [0.13.3]: https://github.com/GuitarWag/gcp-local/releases/tag/v0.13.3
